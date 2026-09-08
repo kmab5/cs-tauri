@@ -1,0 +1,4 @@
+/target/
+/gen/schemas/
+# The bundled game is licensed content. It stays on your machine.
+/games/*.cszip

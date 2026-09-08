@@ -1,0 +1,68 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ChoiceScript",
+  "version": "1.0.0",
+  "identifier": "com.kmab5.choicescript",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ChoiceScript",
+        "width": 1100,
+        "height": 760,
+        "minWidth": 720,
+        "minHeight": 520,
+        "center": true,
+        "resizable": true,
+        "dragDropEnabled": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost blob: data:; media-src 'self' asset: http://asset.localhost blob: data:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg", "msi", "nsis", "deb", "appimage"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": ["games/*.cszip"],
+    "category": "Game",
+    "shortDescription": "ChoiceScript player",
+    "longDescription": "A ChoiceScript player. Games, saves and settings stay on your own machine.",
+    "fileAssociations": [
+      {
+        "ext": ["cszip"],
+        "name": "ChoiceScript game",
+        "description": "ChoiceScript game archive",
+        "role": "Viewer",
+        "mimeType": "application/x-choicescript-archive"
+      }
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"]
+      }
+    }
+  }
+}

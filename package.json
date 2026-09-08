@@ -1,0 +1,53 @@
+{
+  "name": "choicescript-vite-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Fully client-side ChoiceScript player. Static site, no server.",
+  "scripts": {
+    "dev": "node scripts/check-stale.mjs && node scripts/build-engine.mjs && vite",
+    "build": "node scripts/check-stale.mjs && node scripts/build-engine.mjs && tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "build:engine": "node scripts/build-engine.mjs",
+    "test:e2e": "node e2e-test.cjs",
+    "test:theme": "node check-theme-scope.cjs",
+    "test": "npm run build && node check-theme-scope.cjs && node e2e-test.cjs",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "test:rust": "cd src-tauri && cargo test"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.2",
+    "@radix-ui/react-label": "^2.1.0",
+    "@radix-ui/react-progress": "^1.1.0",
+    "@radix-ui/react-radio-group": "^1.2.1",
+    "@radix-ui/react-scroll-area": "^1.2.1",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-tabs": "^1.1.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/api": "^2.1.1",
+    "@tauri-apps/plugin-opener": "^2.2.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.460.0",
+    "motion": "^13.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^2.5.4"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0",
+    "@types/node": "^26.4.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.0.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

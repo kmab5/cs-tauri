@@ -1,0 +1,153 @@
+@import 'tailwindcss';
+
+/*
+ * Tailwind v4 is CSS-first: the theme lives here, not in a config file.
+ *
+ * Every colour and face maps onto the CSS variables the backend serves in
+ * /engine/theme.css, so `bg-paper` and `text-ink` re-theme the moment a player
+ * picks a theme in Settings. There is no second palette to drift out of sync.
+ *
+ * Those engine variables are declared on <body> (and overridden by
+ * body.theme-nocturne, body.font-slab …). Custom properties only inherit
+ * downward, so anything resolving them at :root scope silently gets the
+ * fallback and never re-themes. The fallbacks here exist only for the case
+ * where the backend is unreachable.
+ */
+@theme {
+  --color-paper: var(--cs-paper, #edeae4);
+  --color-raised: var(--cs-paper-raised, #f5f3ee);
+  --color-ink: var(--cs-ink, #22201c);
+  --color-ink-muted: var(--cs-ink-muted, #5a554c);
+  --color-ink-faint: var(--cs-ink-faint, #8b8579);
+  --color-accent: var(--cs-accent, #2f3e6b);
+  --color-accent-fg: var(--cs-accent-ink, #ffffff);
+  --color-accent-wash: var(--cs-accent-wash, #dfe3ec);
+  --color-rule: var(--cs-rule, #d5d0c5);
+  --color-track: var(--cs-stat-track, #d5d0c5);
+  --color-fill: var(--cs-stat-fill, #2f3e6b);
+  --color-fill-opposed: var(--cs-stat-fill-opposed, #7a6a4f);
+
+  --font-body: var(--cs-font-body, Georgia, serif);
+  --font-ui: var(--cs-font-ui, system-ui, sans-serif);
+  --font-mono: var(--cs-font-mono, ui-monospace, monospace);
+
+  --radius-cs: var(--cs-radius, 3px);
+
+  /* WCAG 2.1 AA minimum target size. Never override below this. */
+  --spacing-touch: var(--cs-touch, 44px);
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+
+  /*
+   * CRITICAL: re-declare Tailwind's theme variables at BODY scope.
+   *
+   * @theme emits them at :root. The engine declares its own tokens on <body>
+   * and overrides them per theme (body.theme-nocturne …). Custom properties
+   * only inherit downward, so a :root declaration of
+   * `--color-paper: var(--cs-paper)` can never see the body value and silently
+   * resolves to its fallback — forever.
+   *
+   * The visible result is subtle and easy to misread: anything styled directly
+   * on body (the prose) themes correctly, while everything set by a utility
+   * class (bg-raised, text-ink, border-rule) stays on the default palette. So
+   * choice text changes colour while its background does not.
+   *
+   * Declaring the same names here, inside body, makes every descendant —
+   * including Radix portals, which mount into body — resolve them against the
+   * live theme.
+   */
+  body {
+    --color-paper: var(--cs-paper, #edeae4);
+    --color-raised: var(--cs-paper-raised, #f5f3ee);
+    --color-ink: var(--cs-ink, #22201c);
+    --color-ink-muted: var(--cs-ink-muted, #5a554c);
+    --color-ink-faint: var(--cs-ink-faint, #8b8579);
+    --color-accent: var(--cs-accent, #2f3e6b);
+    --color-accent-fg: var(--cs-accent-ink, #ffffff);
+    --color-accent-wash: var(--cs-accent-wash, #dfe3ec);
+    --color-rule: var(--cs-rule, #d5d0c5);
+    --color-track: var(--cs-stat-track, #d5d0c5);
+    --color-fill: var(--cs-stat-fill, #2f3e6b);
+    --color-fill-opposed: var(--cs-stat-fill-opposed, #7a6a4f);
+    --font-body: var(--cs-font-body, Georgia, serif);
+    --font-ui: var(--cs-font-ui, system-ui, sans-serif);
+    --font-mono: var(--cs-font-mono, ui-monospace, monospace);
+    --radius-cs: var(--cs-radius, 3px);
+
+    margin: 0;
+    background-color: var(--cs-paper, #edeae4);
+    color: var(--cs-ink, #22201c);
+    font-family: var(--cs-font-body, Georgia, serif);
+    font-size: var(--cs-size-body, 1.125rem);
+    line-height: var(--cs-leading, 1.62);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+  }
+
+  /*
+   * The core owns #text: an offscreen host it patches so authored *script
+   * appends are intercepted before the engine writes anything. It is never
+   * visible, and this app must not claim that id.
+   */
+  #text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--cs-accent, #2f3e6b);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /*
+   * The reading surface. Prose is the author's work, so it carries no styling
+   * that competes with it — only what makes long passages comfortable.
+   */
+  .prose-cs p { margin: 0 0 1rem; text-wrap: pretty; hanging-punctuation: first last; }
+  .prose-cs p:last-child { margin-bottom: 0; }
+  .prose-cs img {
+    display: block; height: auto; max-width: 100%;
+    margin: 1.5rem 0; border-radius: var(--cs-radius, 3px);
+  }
+}
+
+/*
+ * Dialogs settle rather than slide. A short travel and a long ease-out reads as
+ * the panel arriving and coming to rest, which is calmer than a drawer.
+ */
+@keyframes cs-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cs-settle {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes cs-dismiss {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.98); }
+}
+
+/* Screen changes get a real crossfade where the browser supports it. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(story), ::view-transition-new(story) {
+    animation-duration: 260ms;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  ::view-transition-old(story), ::view-transition-new(story) { animation: none; }
+}

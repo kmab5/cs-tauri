@@ -1,0 +1,116 @@
+/*
+ * tokens.css — every colour, size and face as a custom property.
+ *
+ * This file defines tokens ONLY. No component rules, no literal colours
+ * anywhere else in the stylesheet. To restyle a game, override these in
+ * mygame/theme.css — no JavaScript, no build step.
+ *
+ * Three scopes, set as classes on <body>. The names are fixed by the existing
+ * preference keys and by authored *script blocks that read them back:
+ *   (none)      the default reading theme
+ *   .nightmode  dark
+ *   .whitemode  plain white
+ *
+ * Design direction: ink on paperback stock. The paper is deliberately greyer
+ * and cooler than the old #F7F4F1 cream, so long passages sit back instead of
+ * glowing. The accent is a deep ink-indigo rather than a warm clay — it reads
+ * as written-on rather than decorated, and it is the only saturated colour in
+ * the interface.
+ */
+
+:root {
+  /* --- type ------------------------------------------------------------- */
+  /* Iowan Old Style and Charter are text faces cut for long-form reading and
+   * ship on macOS/iOS; Constantia is the Windows equivalent. Preferring them
+   * over Palatino is the single biggest legibility change in this theme. */
+  --cs-font-body: "Iowan Old Style", Charter, Constantia, "Palatino Linotype",
+                  Palatino, Georgia, serif;
+  --cs-font-ui: ui-sans-serif, -apple-system, "Segoe UI", Inter, system-ui,
+                "Helvetica Neue", sans-serif;
+  --cs-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --cs-size-body: 1.125rem;
+  --cs-size-small: 0.875rem;
+  --cs-size-ui: 0.9375rem;
+  --cs-leading: 1.62;
+  --cs-measure: 66ch;
+
+  /* --- spacing ---------------------------------------------------------- */
+  --cs-space-1: 0.25rem;
+  --cs-space-2: 0.5rem;
+  --cs-space-3: 0.75rem;
+  --cs-space-4: 1rem;
+  --cs-space-5: 1.5rem;
+  --cs-space-6: 2.5rem;
+
+  /* WCAG 2.1 AA minimum target size. Never override below this. */
+  --cs-touch: 44px;
+
+  --cs-radius: 3px;
+  --cs-rule-width: 1px;
+
+  /* --- motion ----------------------------------------------------------- */
+  --cs-fade: 220ms;
+  --cs-ease: cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+/* --- default scope: paperback ------------------------------------------- */
+body {
+  --cs-paper: #EDEAE4;
+  --cs-paper-raised: #F5F3EE;
+  --cs-ink: #22201C;
+  --cs-ink-muted: #5A554C;
+  --cs-ink-faint: #8B8579;
+  --cs-accent: #2F3E6B;
+  --cs-accent-ink: #FFFFFF;
+  --cs-accent-wash: #DFE3EC;
+  --cs-rule: #D5D0C5;
+  --cs-focus: #2F3E6B;
+
+  --cs-stat-track: #D5D0C5;
+  --cs-stat-fill: #2F3E6B;
+  --cs-stat-fill-opposed: #7A6A4F;
+  --cs-stat-ink: #22201C;
+}
+
+/* --- dark scope --------------------------------------------------------- */
+body.nightmode {
+  --cs-paper: #17181A;
+  --cs-paper-raised: #212327;
+  --cs-ink: #D8D6D0;
+  --cs-ink-muted: #9C9890;
+  --cs-ink-faint: #6E6B66;
+  --cs-accent: #93A7D9;
+  --cs-accent-ink: #14161C;
+  --cs-accent-wash: #232936;
+  --cs-rule: #33363B;
+  --cs-focus: #93A7D9;
+
+  --cs-stat-track: #33363B;
+  --cs-stat-fill: #93A7D9;
+  --cs-stat-fill-opposed: #C2A878;
+  --cs-stat-ink: #14161C;
+}
+
+/* --- plain white scope -------------------------------------------------- */
+body.whitemode {
+  --cs-paper: #FFFFFF;
+  --cs-paper-raised: #FFFFFF;
+  --cs-ink: #1A1A1A;
+  --cs-ink-muted: #565656;
+  --cs-ink-faint: #8A8A8A;
+  --cs-accent: #2F3E6B;
+  --cs-accent-ink: #FFFFFF;
+  --cs-accent-wash: #E8EBF2;
+  --cs-rule: #E2E2E2;
+  --cs-focus: #2F3E6B;
+
+  --cs-stat-track: #E2E2E2;
+  --cs-stat-fill: #2F3E6B;
+  --cs-stat-fill-opposed: #8A7550;
+  --cs-stat-ink: #1A1A1A;
+}
+
+/* --- reader font preference (existing contract) ------------------------- */
+body.sans { --cs-font-body: var(--cs-font-ui); }
+body.dyslexia { --cs-font-body: "OpenDyslexic", var(--cs-font-ui); --cs-leading: 1.75; }

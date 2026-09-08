@@ -1,0 +1,211 @@
+/*
+ * themes.css — selectable themes.
+ *
+ * Each theme is a class on <body> that redefines tokens from tokens.css.
+ * Every theme redefines its tokens THREE times: default, .nightmode and
+ * .whitemode, because authored *script blocks flip those classes directly and
+ * read them back. A theme that only styled the default scope would break the
+ * moment a game called changeBackgroundColor("black").
+ *
+ * Contrast: every body/ink pair below clears WCAG AA (4.5:1) against its own
+ * paper. Muted ink clears 4.5:1 too — it is used for real text, not decoration.
+ *
+ * To add a theme: copy a block, change the values, add an entry to THEMES in
+ * ui/screens/settings.js. No JavaScript logic required.
+ */
+
+/* ============================================================ TERMINAL
+   Phosphor on black. Monospace-adjacent, deliberately high contrast. */
+
+body.theme-terminal {
+  --cs-paper: #0B0F0C;
+  --cs-paper-raised: #121814;
+  --cs-ink: #C8E6C9;
+  --cs-ink-muted: #8FB894;
+  --cs-ink-faint: #6B8F70;
+  --cs-accent: #4ADE80;
+  --cs-accent-ink: #06130A;
+  --cs-accent-wash: #16241A;
+  --cs-rule: #24352A;
+  --cs-focus: #4ADE80;
+  --cs-stat-track: #24352A;
+  --cs-stat-fill: #4ADE80;
+  --cs-stat-fill-opposed: #A3B18A;
+  --cs-stat-ink: #06130A;
+  --cs-radius: 0px;
+}
+
+body.theme-terminal.whitemode {
+  --cs-paper: #F2F5F2;
+  --cs-paper-raised: #FFFFFF;
+  --cs-ink: #13291A;
+  --cs-ink-muted: #3D5943;
+  --cs-ink-faint: #5E7A64;
+  --cs-accent: #146B33;
+  --cs-accent-ink: #FFFFFF;
+  --cs-accent-wash: #DCEEE2;
+  --cs-rule: #C9DACE;
+  --cs-focus: #146B33;
+  --cs-stat-track: #C9DACE;
+  --cs-stat-fill: #146B33;
+  --cs-stat-fill-opposed: #6B7F52;
+  --cs-stat-ink: #13291A;
+}
+
+/* ============================================================ NOCTURNE
+   Deep navy, low glare. Built for reading at night without pure black. */
+
+body.theme-nocturne {
+  --cs-paper: #12161F;
+  --cs-paper-raised: #1A2030;
+  --cs-ink: #D6DCE8;
+  --cs-ink-muted: #9AA5BA;
+  --cs-ink-faint: #6F7B92;
+  --cs-accent: #8FA9E8;
+  --cs-accent-ink: #0E121B;
+  --cs-accent-wash: #212A3F;
+  --cs-rule: #2A3346;
+  --cs-focus: #8FA9E8;
+  --cs-stat-track: #2A3346;
+  --cs-stat-fill: #8FA9E8;
+  --cs-stat-fill-opposed: #C7A98A;
+  --cs-stat-ink: #0E121B;
+}
+
+body.theme-nocturne.whitemode {
+  --cs-paper: #FBFCFE;
+  --cs-paper-raised: #FFFFFF;
+  --cs-ink: #161C28;
+  --cs-ink-muted: #48536B;
+  --cs-ink-faint: #6B768E;
+  --cs-accent: #2C4383;
+  --cs-accent-ink: #FFFFFF;
+  --cs-accent-wash: #E4E9F6;
+  --cs-rule: #DCE1EC;
+  --cs-focus: #2C4383;
+  --cs-stat-track: #DCE1EC;
+  --cs-stat-fill: #2C4383;
+  --cs-stat-fill-opposed: #8A6B4A;
+  --cs-stat-ink: #161C28;
+}
+
+/* ============================================================ MANUSCRIPT
+   High-contrast parchment. Nearly black ink, oxblood accent. */
+
+body.theme-manuscript {
+  --cs-paper: #F4EFE3;
+  --cs-paper-raised: #FBF8F1;
+  --cs-ink: #1A1712;
+  --cs-ink-muted: #4E463A;
+  --cs-ink-faint: #7A705F;
+  --cs-accent: #7B2D26;
+  --cs-accent-ink: #FBF8F1;
+  --cs-accent-wash: #EFE0DA;
+  --cs-rule: #D9CFBC;
+  --cs-focus: #7B2D26;
+  --cs-stat-track: #D9CFBC;
+  --cs-stat-fill: #7B2D26;
+  --cs-stat-fill-opposed: #3F5340;
+  --cs-stat-ink: #1A1712;
+}
+
+body.theme-manuscript.nightmode {
+  --cs-paper: #16130F;
+  --cs-paper-raised: #201B15;
+  --cs-ink: #E6DDCB;
+  --cs-ink-muted: #ADA292;
+  --cs-ink-faint: #7E7466;
+  --cs-accent: #D98A80;
+  --cs-accent-ink: #16130F;
+  --cs-accent-wash: #2E211E;
+  --cs-rule: #342C23;
+  --cs-focus: #D98A80;
+  --cs-stat-track: #342C23;
+  --cs-stat-fill: #D98A80;
+  --cs-stat-fill-opposed: #8FA98F;
+  --cs-stat-ink: #16130F;
+}
+
+/* ============================================================ NEWSPRINT
+   Flat grey and plain white. No warmth, no accent colour beyond graphite. */
+
+body.theme-newsprint {
+  --cs-paper: #FFFFFF;
+  --cs-paper-raised: #F7F7F7;
+  --cs-ink: #141414;
+  --cs-ink-muted: #4A4A4A;
+  --cs-ink-faint: #737373;
+  --cs-accent: #1F1F1F;
+  --cs-accent-ink: #FFFFFF;
+  --cs-accent-wash: #ECECEC;
+  --cs-rule: #DADADA;
+  --cs-focus: #1F1F1F;
+  --cs-stat-track: #DADADA;
+  --cs-stat-fill: #2E2E2E;
+  --cs-stat-fill-opposed: #8A8A8A;
+  --cs-stat-ink: #141414;
+  --cs-radius: 0px;
+}
+
+body.theme-newsprint.nightmode {
+  --cs-paper: #131313;
+  --cs-paper-raised: #1C1C1C;
+  --cs-ink: #E8E8E8;
+  --cs-ink-muted: #ABABAB;
+  --cs-ink-faint: #8A8A8A;
+  --cs-accent: #E8E8E8;
+  --cs-accent-ink: #131313;
+  --cs-accent-wash: #262626;
+  --cs-rule: #2E2E2E;
+  --cs-focus: #E8E8E8;
+  --cs-stat-track: #2E2E2E;
+  --cs-stat-fill: #D0D0D0;
+  --cs-stat-fill-opposed: #7A7A7A;
+  --cs-stat-ink: #131313;
+}
+
+/* ============================================================ EMBER
+   Dark slate with warm amber. For games that want heat. */
+
+body.theme-ember {
+  --cs-paper: #191614;
+  --cs-paper-raised: #221E1B;
+  --cs-ink: #EDE4DA;
+  --cs-ink-muted: #B3A79B;
+  --cs-ink-faint: #85796D;
+  --cs-accent: #E8974A;
+  --cs-accent-ink: #191614;
+  --cs-accent-wash: #2E251C;
+  --cs-rule: #362F29;
+  --cs-focus: #E8974A;
+  --cs-stat-track: #362F29;
+  --cs-stat-fill: #E8974A;
+  --cs-stat-fill-opposed: #7FA5A0;
+  --cs-stat-ink: #191614;
+}
+
+body.theme-ember.whitemode {
+  --cs-paper: #FFFCF8;
+  --cs-paper-raised: #FFFFFF;
+  --cs-ink: #1F1913;
+  --cs-ink-muted: #574C41;
+  --cs-ink-faint: #7B6E61;
+  --cs-accent: #9A4E11;
+  --cs-accent-ink: #FFFFFF;
+  --cs-accent-wash: #F6E6D6;
+  --cs-rule: #E7DCCF;
+  --cs-focus: #9A4E11;
+  --cs-stat-track: #E7DCCF;
+  --cs-stat-fill: #9A4E11;
+  --cs-stat-fill-opposed: #3F6B66;
+  --cs-stat-ink: #1F1913;
+}
+
+/* ============================================================ TYPEFACES
+   Selected from settings. Serif is the default and needs no class. */
+
+body.font-sans     { --cs-font-body: var(--cs-font-ui); }
+body.font-humanist { --cs-font-body: Optima, Candara, "Gill Sans", "Gill Sans MT", "Trebuchet MS", sans-serif; }
+body.font-slab     { --cs-font-body: Rockwell, "Roboto Slab", "Bookman Old Style", Georgia, serif; }
+body.font-mono     { --cs-font-body: var(--cs-font-mono); --cs-measure: 72ch; }
+body.font-dyslexia { --cs-font-body: "OpenDyslexic", var(--cs-font-ui); --cs-leading: 1.75; }
