@@ -5,6 +5,71 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 5 — Verification against the real game, and the last loose end
+
+All nine phases were implemented last session, so this one went after the two things still worth
+having: proof that the actual game works, and a setting that existed in code but nowhere in the
+interface.
+
+### Choice of Magics passes the full harness
+
+`npm run test:game` — new. It unpacks `src-tauri/games/*.cszip` and hands the path to
+`e2e-test.cjs`, which already accepts an unpacked game and builds its own archive from it. No test
+logic is duplicated; it is the same 22 assertions, pointed at real content.
+
+**22 passed, 0 failed** on Choice of Magics: 113 files unpacked, 22 scenes preloaded rather than
+fetched, title published, first screen rendered, story advanced on a real choice, stats dialog
+opened, stat bars rendered as meters, and nothing reached a server.
+
+That is the corpus the fixture game cannot stand in for. It exercises 4 MB of scene text, 100
+achievements, 325 `*achieve` calls, 73 `*text_image` renders, 3 `*script` blocks going through
+`eval`, 2 `*stat_chart` screens, and the no-`*ifid` path where the save namespace has to come from
+our own manifest. The `*script` blocks passing is the concrete evidence behind the `'unsafe-eval'`
+decision in the CSP: without it, this game breaks three times.
+
+Note what this does *not* prove: it runs the web path, on IndexedDB, in jsdom. The parsing and
+engine half is shared with the desktop build, so that half is now verified against real content.
+Rust is still unverified.
+
+### The zip reader, and a bug worth writing down
+
+`test-bundled-game.mjs` needed to read a zip, and Node has no zip built in — not worth a dev
+dependency for one script, so it walks the central directory directly.
+
+First attempt failed with `Z_BUF_ERROR`, because I read the compression method and compressed size
+from each entry's **local** header. Archives written by a streaming zip writer set general purpose
+bit 3 and leave both fields as zero there, filling them in afterwards in a data descriptor. The
+central directory always has the real values. Fixed, and commented, because it is exactly the kind
+of thing that looks like a corrupt archive rather than a reader bug.
+
+### Window appearance, now reachable
+
+`setAppearance()` shipped last session with nothing calling it, which made the OS-following chrome
+a one-way door: it followed the system and the player could not say otherwise. Settings now has a
+**Window** row — Match system / Light / Dark — above the reading Theme row, and only on the
+desktop.
+
+The two rows sitting one above the other is the whole design argument made visible: Window paints
+the frame and follows the operating system; Theme paints the author's page and follows the reader.
+
+### Verified
+
+- `npm run build` — clean. Bundle 445 kB, CSS 37.9 kB.
+- `node check-theme-scope.cjs` — 16 tokens resolve.
+- `node scripts/check-register.mjs` — 19 chrome tokens, none crossing.
+- `node e2e-test.cjs` — 22 passed, 0 failed on the fixture game.
+- `npm run test:game` — 22 passed, 0 failed on Choice of Magics.
+
+### What is left, in one sentence
+
+`cargo build`. Everything else has been exercised.
+
+When it does compile, the first thing to check is a chapter plate rendering in chapter one: 73
+`*text_image` calls ride on the asset protocol scope, and that is the one behaviour no harness here
+could reach.
+
+---
+
 ## 2026-09-08 · Session 4 — Phase 9 (reading polish, icons, packaging)
 
 The plan is now complete. All nine phases are implemented; the Rust half remains uncompiled.
