@@ -3,7 +3,7 @@ name = "cs-tauri"
 version = "0.1.6"
 description = "A ChoiceScript player for the desktop. Games and saves stay on your own machine."
 authors = ["kmab5"]
-edition = "2026"
+edition = "2021"
 rust-version = "1.77.2"
 
 # The binary is a thin shim; everything lives in the library so tests can reach
