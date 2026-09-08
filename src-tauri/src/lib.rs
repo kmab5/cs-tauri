@@ -56,36 +56,6 @@ fn archives_from_args<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
         .collect()
 }
 
-/// Translucent chrome where the platform supports it.
-///
-/// Applied at runtime rather than in the config because an unsupported effect
-/// is an error, not a no-op: Mica needs Windows 11, and Linux has nothing
-/// equivalent. Every surface that uses it also has an opaque fallback in CSS.
-fn apply_window_effects(app: &AppHandle) {
-    let Some(window) = app.get_webview_window("main") else {
-        return;
-    };
-    #[cfg(target_os = "macos")]
-    {
-        use tauri::window::{Effect, EffectState, EffectsBuilder};
-        let _ = window.set_effects(
-            EffectsBuilder::new()
-                .effect(Effect::Sidebar)
-                .state(EffectState::FollowsWindowActiveState)
-                .build(),
-        );
-    }
-    #[cfg(target_os = "windows")]
-    {
-        use tauri::window::{Effect, EffectsBuilder};
-        let _ = window.set_effects(EffectsBuilder::new().effect(Effect::Mica).build());
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        let _ = &window;
-    }
-}
-
 pub fn run() {
     let mut builder = tauri::Builder::default();
 
@@ -123,12 +93,12 @@ pub fn run() {
             library::library_bytes,
             library::decompress,
             library::take_bundled,
+            menu::set_game_menu_enabled,
             store::read_store,
             store::write_store,
         ])
         .setup(|app| {
             paths::ensure_dirs(&app.handle().clone())?;
-            apply_window_effects(&app.handle().clone());
             for path in archives_from_args(std::env::args()) {
                 queue_archive(&app.handle().clone(), path);
             }

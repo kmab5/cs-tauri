@@ -1,28 +1,34 @@
 /**
  * The window frame.
  *
- * Three panes: library on the left, the story in the middle, the character
- * sheet on the right when there is room for it. The titlebar is ours, so the
- * game's controls live in the window's own chrome rather than in a bar that
- * scrolls with the page.
+ * No game open: the library has the whole window. A game open: the sidebar
+ * shows that game, the story takes the middle, and the character sheet docks on
+ * the right when there is room for it.
  *
- * Everything here is desktop-only. The static site keeps the sticky in-page
- * title bar it has always had, which is the right answer for a page.
+ * Everything the titlebar can do, the menu and the keyboard can do too — they
+ * share one handler registry (lib/desktop/menu.ts) rather than three code paths
+ * that drift apart.
  */
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { BarChart3, Bookmark, Maximize2, PanelLeft, Settings2, Trophy } from 'lucide-react';
 
 import type { ChoiceScriptApi } from '@/lib/choicescript';
 import type { StoredGame } from '@/lib/library';
 import { useMenu } from '@/lib/desktop/menu';
+import { setGameMenuEnabled } from '@/lib/desktop/menu';
 import { Player } from './Player';
-import { Sidebar } from './Sidebar';
+import { GamePanel } from './GamePanel';
+import { LibraryPage } from './LibraryPage';
 import { StatsPanel } from './StatsPanel';
-import { DropOverlay } from './DropOverlay';
+import { AppSettings } from './AppSettings';
 import { readScroll, saveScroll, useReadingKeys } from './useReadingKeys';
+import { useAutosave } from './useAutosave';
+import { setTheme, setZoom } from '@/lib/theme';
 
-/** Below this the inspector would squeeze the reading measure, so it stays a dialog. */
+/** Below this the sheet would squeeze the reading measure, so it stays a dialog. */
 const WIDE = '(min-width: 1100px)';
+const SIDEBAR = { min: 180, max: 460, key: 'cs-sidebar-w' };
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(
@@ -42,11 +48,57 @@ function useMediaQuery(query: string) {
 const ZOOM_STEP = 0.1;
 const ZOOM_RANGE = [0.7, 2] as const;
 
+const pane = () => document.querySelector('.app-reading');
+
 /**
- * The controls, which need the live state for the achievement count. Split out
- * so the frame can render before a game is open, when there is no engine to
- * subscribe to.
+ * Keyboard paging, scroll memory and the rolling autosave. Headless, because
+ * all three need the live engine state and the frame renders before there is
+ * any engine.
  */
+function ReadingKeys({ cs, gameId }: { cs: ChoiceScriptApi; gameId: string }) {
+  const state = useSyncExternalStore(cs.subscribe, cs.getState, cs.getState);
+
+  useReadingKeys({
+    pane,
+    canContinue: state.pending?.kind === 'next' && !state.overlay,
+    onContinue: () => cs.next(),
+  });
+
+  useAutosave(cs, state.history, state.canSave);
+
+  /* The engine's settings dialog is the other way these change. Mirroring them
+     back is what lets the library page match the game the reader just left. */
+  useEffect(() => {
+    setTheme(state.theme.name);
+    setZoom(state.theme.zoom);
+  }, [state.theme.name, state.theme.zoom]);
+
+  /* Restored once, at the start of the session. Player scrolls each new screen
+     back to the top, so anything later would be fighting it. */
+  useEffect(() => {
+    const el = pane();
+    const top = readScroll(gameId);
+    if (el && top) requestAnimationFrame(() => el.scrollTo({ top }));
+  }, [gameId]);
+
+  useEffect(() => {
+    const el = pane();
+    if (!el) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const onScroll = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => saveScroll(gameId, el.scrollTop), 400);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      el.removeEventListener('scroll', onScroll);
+    };
+  }, [gameId]);
+
+  return null;
+}
+
 function GameControls({
   cs,
   wide,
@@ -54,7 +106,6 @@ function GameControls({
   onToggleStats,
 }: {
   cs: ChoiceScriptApi;
-  /** Wide enough to dock the sheet beside the story rather than over it. */
   wide: boolean;
   statsDocked: boolean;
   onToggleStats: () => void;
@@ -88,13 +139,16 @@ function GameControls({
         aria-pressed={statsDocked}
         onClick={wide ? onToggleStats : () => cs.openStats()}
       >
-        <BarChart3 className="size-3.5" aria-hidden /> Stats
+        <BarChart3 className="size-3.5" aria-hidden />
+        <span className="app-btn-label">Stats</span>
       </button>
       <button className="app-btn" onClick={() => cs.openSaves()}>
-        <Bookmark className="size-3.5" aria-hidden /> Saves
+        <Bookmark className="size-3.5" aria-hidden />
+        <span className="app-btn-label">Saves</span>
       </button>
       <button className="app-btn" onClick={() => cs.openAchievements()}>
-        <Trophy className="size-3.5" aria-hidden /> Achievements
+        <Trophy className="size-3.5" aria-hidden />
+        <span className="app-btn-label">Achievements</span>
         {total > 0 && (
           <span className="app-badge">
             {earned}/{total}
@@ -102,51 +156,45 @@ function GameControls({
         )}
       </button>
       <button className="app-btn" onClick={() => cs.openSettings()}>
-        <Settings2 className="size-3.5" aria-hidden /> Settings
+        <Settings2 className="size-3.5" aria-hidden />
+        <span className="app-btn-label">Settings</span>
       </button>
     </>
   );
 }
 
-const pane = () => document.querySelector('.app-reading');
+/** The drag handle on the sidebar's trailing edge. */
+function Resizer({ onWidth }: { onWidth: (px: number) => void }) {
+  const [dragging, setDragging] = useState(false);
 
-/**
- * Keyboard paging and scroll memory. Headless, because both need the live
- * engine state and the frame itself renders before there is any engine.
- */
-function ReadingKeys({ cs, gameId }: { cs: ChoiceScriptApi; gameId: string }) {
-  const state = useSyncExternalStore(cs.subscribe, cs.getState, cs.getState);
-
-  useReadingKeys({
-    pane,
-    canContinue: state.pending?.kind === 'next',
-    onContinue: () => cs.next(),
-  });
-
-  /* Restored once, at the start of the session. Player scrolls each new screen
-     back to the top, so anything later would be fighting it. */
-  useEffect(() => {
-    const el = pane();
-    const top = readScroll(gameId);
-    if (el && top) requestAnimationFrame(() => el.scrollTo({ top }));
-  }, [gameId]);
-
-  useEffect(() => {
-    const el = pane();
-    if (!el) return;
-    let timer: ReturnType<typeof setTimeout>;
-    const onScroll = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => saveScroll(gameId, el.scrollTop), 400);
+  const start = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    setDragging(true);
+    const move = (e: PointerEvent) => onWidth(e.clientX);
+    const stop = () => {
+      setDragging(false);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
     };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      clearTimeout(timer);
-      el.removeEventListener('scroll', onScroll);
-    };
-  }, [gameId]);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+  };
 
-  return null;
+  return (
+    <button
+      className="app-resizer"
+      data-dragging={dragging}
+      data-tauri-drag-region="false"
+      aria-label="Resize the sidebar"
+      onPointerDown={start}
+      /* Keyboard-reachable too: a mouse-only resize is not a resize for
+         everyone. */
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowLeft') onWidth(-1);
+        if (e.key === 'ArrowRight') onWidth(-2);
+      }}
+    />
+  );
 }
 
 export function Shell({
@@ -162,24 +210,60 @@ export function Shell({
 }) {
   const [sidebar, setSidebar] = useState(true);
   const [inspector, setInspector] = useState(false);
-  /* Focus mode hides both side panes without forgetting whether they were
-     open, so leaving it puts the window back the way the reader had it. */
   const [focus, setFocus] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [appSettings, setAppSettings] = useState(false);
+  const [width, setWidth] = useState(() => {
+    const stored = Number(localStorage.getItem(SIDEBAR.key));
+    return Number.isFinite(stored) && stored >= SIDEBAR.min ? stored : 260;
+  });
   const wide = useMediaQuery(WIDE);
   const docked = inspector && wide && !focus && !!cs && !!game;
 
-  const refreshLibrary = useCallback(() => setError(null), []);
+  /* Written to the DOM rather than passed down, so the resize costs one style
+     recalculation instead of a React render per pointer move. */
+  useEffect(() => {
+    document.body.style.setProperty('--app-sidebar-w', `${width}px`);
+    localStorage.setItem(SIDEBAR.key, String(width));
+  }, [width]);
+
+  const resize = useCallback((clientX: number) => {
+    setWidth((current) => {
+      /* -1 and -2 are the keyboard nudges from the grip. */
+      const next = clientX === -1 ? current - 16 : clientX === -2 ? current + 16 : clientX;
+      return Math.round(Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, next)));
+    });
+  }, []);
+
+  /*
+   * Focus mode takes the window fullscreen as well as hiding the panes. Hiding
+   * them alone left the app the same size with the reading column stranded in
+   * the middle of it, which is where the empty band came from.
+   */
+  useEffect(() => {
+    void getCurrentWindow()
+      .setFullscreen(focus)
+      .catch(() => {
+        /* a window manager that refuses still gets the panes hidden */
+      });
+  }, [focus]);
+
+  /* Game-only menu items are disabled on the library page rather than left
+     enabled and inert. */
+  useEffect(() => {
+    void setGameMenuEnabled(!!game && !!cs);
+  }, [game, cs]);
 
   useMenu({
     'toggle-sidebar': () => setSidebar((on) => !on),
-    'toggle-stats': () => (wide ? setInspector((on) => !on) : cs?.openStats()),
-    'toggle-focus': () => setFocus((on) => !on),
-    library: onExit,
+    'toggle-stats': () =>
+      game && cs ? (wide ? setInspector((on) => !on) : cs.openStats()) : undefined,
+    'toggle-focus': () => game && setFocus((on) => !on),
+    library: () => (game ? onExit() : undefined),
+    /* On the library page Settings means the app's settings, not a running
+       game's — there is no game to restart or save. */
+    settings: () => (game && cs ? undefined : setAppSettings(true)),
   });
 
-  /* Escape is the way out of a mode; it should never be the only way in. */
   useEffect(() => {
     if (!focus) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFocus(false);
@@ -188,76 +272,72 @@ export function Shell({
   }, [focus]);
 
   return (
-    <div className="app-shell">
-      <Sidebar
-        hidden={!sidebar || focus}
-        activeId={game?.id ?? null}
-        onPlay={onPlay}
-        onBusy={setBusy}
-        onError={setError}
-      />
+    <div className="app-shell" data-focus={focus}>
+      {game && !focus && sidebar && (
+        <GamePanel game={game} cs={cs} onExit={onExit}>
+          <Resizer onWidth={resize} />
+        </GamePanel>
+      )}
 
       <div className="app-main">
         <header className="app-titlebar" data-tauri-drag-region>
-          <button
-            className="app-btn"
-            data-tauri-drag-region="false"
-            aria-pressed={sidebar}
-            aria-label="Toggle sidebar"
-            onClick={() => setSidebar((on) => !on)}
-          >
-            <PanelLeft className="size-4" aria-hidden />
-          </button>
+          {game && (
+            <button
+              className="app-btn"
+              data-tauri-drag-region="false"
+              aria-pressed={sidebar}
+              aria-label="Toggle sidebar"
+              onClick={() => setSidebar((on) => !on)}
+            >
+              <PanelLeft className="size-4" aria-hidden />
+            </button>
+          )}
 
           <h1 className="app-title" data-tauri-drag-region>
-            {game?.title ?? 'ChoiceScript'}
-            {game?.author && <span> — {game.author}</span>}
+            <b>{game?.title ?? 'ChoiceScript Player'}</b>
+            {game?.author && <span>{game.author}</span>}
           </h1>
 
           <div className="flex items-center gap-0.5" data-tauri-drag-region="false">
-            {cs && game && (
-              <button
-                className="app-btn"
-                aria-pressed={focus}
-                aria-label="Focus mode"
-                title="Focus mode"
-                onClick={() => setFocus((on) => !on)}
-              >
-                <Maximize2 className="size-3.5" aria-hidden />
+            {game && cs ? (
+              <>
+                <button
+                  className="app-btn"
+                  aria-pressed={focus}
+                  aria-label="Focus mode"
+                  title="Focus mode (Ctrl+Shift+F)"
+                  onClick={() => setFocus((on) => !on)}
+                >
+                  <Maximize2 className="size-3.5" aria-hidden />
+                </button>
+                <GameControls
+                  cs={cs}
+                  wide={wide && !focus}
+                  statsDocked={docked}
+                  onToggleStats={() => setInspector((on) => !on)}
+                />
+              </>
+            ) : (
+              <button className="app-btn" onClick={() => setAppSettings(true)}>
+                <Settings2 className="size-3.5" aria-hidden />
+                <span className="app-btn-label">Settings</span>
               </button>
-            )}
-            {cs && game && (
-              <GameControls
-                cs={cs}
-                wide={wide && !focus}
-                statsDocked={docked}
-                onToggleStats={() => setInspector((on) => !on)}
-              />
             )}
           </div>
         </header>
 
+        {/* data-inert is set by StatsPanel while the sheet is open: the story
+            stays readable but cannot take input, because the engine would route
+            the answer into the stats channel. */}
         <div className="app-reading">
-          <div className="app-measure">
-            {busy && (
-              <p className="app-note" role="status">
-                Unpacking {busy}…
-              </p>
-            )}
-            {error && (
-              <p className="app-note" role="alert">
-                {error}
-              </p>
-            )}
-            {game && cs ? (
-              <>
-                <ReadingKeys cs={cs} gameId={game.id} />
-                <Player cs={cs} game={game} />
-              </>
-            ) : (
-              <Welcome />
-            )}
-          </div>
+          {game && cs ? (
+            <div className="app-measure">
+              <ReadingKeys cs={cs} gameId={game.id} />
+              <Player cs={cs} game={game} statsDocked={docked} />
+            </div>
+          ) : (
+            <LibraryPage onPlay={onPlay} />
+          )}
         </div>
       </div>
 
@@ -265,19 +345,7 @@ export function Shell({
         <StatsPanel cs={cs} gameId={game.id} onClose={() => setInspector(false)} />
       )}
 
-      <DropOverlay onImported={refreshLibrary} onBusy={setBusy} onError={setError} />
-    </div>
-  );
-}
-
-function Welcome() {
-  return (
-    <div className="pt-16">
-      <h2 className="m-0 font-ui text-lg font-medium text-ink">Pick a game</h2>
-      <p className="mt-2 font-ui text-sm text-ink-muted">
-        Choose one from the library, or drop a <code className="font-mono">.zip</code> or{' '}
-        <code className="font-mono">.cszip</code> archive anywhere in this window.
-      </p>
+      {appSettings && <AppSettings onClose={() => setAppSettings(false)} />}
     </div>
   );
 }

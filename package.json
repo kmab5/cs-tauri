@@ -1,7 +1,7 @@
 {
   "name": "cs-tauri",
   "private": true,
-  "version": "0.1.6",
+  "version": "0.1.7",
   "type": "module",
   "description": "A ChoiceScript player for the desktop. Games and saves stay on your own machine.",
   "scripts": {

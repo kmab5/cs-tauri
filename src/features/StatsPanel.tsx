@@ -1,30 +1,26 @@
 /**
- * The stats screen, docked.
+ * The character sheet, docked.
  *
- * A window has room to keep the character sheet beside the story instead of
- * behind a dialog, so on a wide window it lives here.
+ * The previous version ran the stats scene, copied the blocks out and then
+ * closed the overlay immediately to lower the engine's stats flag. That was
+ * wrong, and visibly so: `showStats()` sets `bus.statsMode`, every block the
+ * engine emits routes to the stats channel while it is up (bus.js:74), and the
+ * scene is still emitting when the close lands. The remainder arrived as
+ * *story* blocks — which is why the character sheet appeared in the middle of
+ * the page.
  *
- * It is a snapshot, not a live view, and that is forced by the engine rather
- * than chosen. `showStats()` sets `bus.statsMode`, and while that flag is up
- * *every* block the engine emits is routed to the stats channel (bus.js:74)
- * — so a panel that simply stayed open would swallow the story's own output
- * the moment the player made a choice. Instead the scene is run, its blocks
- * are copied out, and the overlay is closed again immediately, which lowers
- * the flag and hands the story channel back.
- *
- * Refreshing is safe to do often: the engine runs the stats scene with
- * `saveSlot: 'temp'` (shell.js:79), its own convention for exactly this, so
- * none of it touches the player's autosave.
- *
- * Interactive stats screens keep their dialog. A game whose stats page asks a
- * question cannot be answered from a snapshot, so the panel says so and sends
- * the player to the full screen.
+ * So the overlay stays open and this renders the live channel. The engine is
+ * left in exactly the state it puts itself in; nothing races it. The cost is
+ * that the story cannot take input while the sheet is open, for the same
+ * routing reason — so the reading pane is marked inert, which the stylesheet
+ * shows by dimming the choices.
  */
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { RefreshCw, X } from 'lucide-react';
+import { useEffect, useSyncExternalStore } from 'react';
+import { X } from 'lucide-react';
 
-import type { Block, ChoiceScriptApi } from '@/lib/choicescript';
+import type { ChoiceScriptApi } from '@/lib/choicescript';
 import { Blocks } from './Blocks';
+import { PendingView } from './Pending';
 
 export function StatsPanel({
   cs,
@@ -36,61 +32,54 @@ export function StatsPanel({
   onClose: () => void;
 }) {
   const state = useSyncExternalStore(cs.subscribe, cs.getState, cs.getState);
-  const [snapshot, setSnapshot] = useState<Block[]>([]);
-  const [interactive, setInteractive] = useState(false);
-  const capturing = useRef(false);
+  const open = state.overlay === 'stats';
 
-  const refresh = useCallback(() => {
-    /* Never while a dialog is up: openStats() toggles, so calling it with an
-       overlay already open would close the player's own window. */
-    if (cs.getState().overlay) return;
-    capturing.current = true;
-    cs.openStats();
+  /* Opening the panel runs the scene; closing it hands the story channel back.
+     openStats() toggles, so it is only ever called when nothing is open. */
+  useEffect(() => {
+    if (!cs.getState().overlay) cs.openStats();
+    return () => {
+      if (cs.getState().overlay === 'stats') cs.closeOverlay();
+    };
   }, [cs]);
 
+  /* Re-read on each new screen, so the sheet keeps up with the story. Cheap to
+     do often: the engine runs this scene with saveSlot 'temp' (shell.js:79),
+     its own convention for exactly this, so the autosave is untouched. */
   useEffect(() => {
-    if (!capturing.current || state.overlay !== 'stats') return;
-    capturing.current = false;
-    setSnapshot(state.statsBlocks);
-    setInteractive(state.statsPending !== null);
-    cs.closeOverlay();
-  }, [state.overlay, state.statsBlocks, state.statsPending, cs]);
+    if (!cs.getState().overlay) cs.openStats();
+  }, [cs, state.history]);
 
-  /* Re-read on every screen the player reaches, so the sheet keeps up. */
-  const latest = useRef(refresh);
-  latest.current = refresh;
+  /* Set here rather than in Shell because this component is the one that knows
+     whether the engine's stats mode is actually up. */
   useEffect(() => {
-    latest.current();
-  }, [state.history]);
+    const pane = document.querySelector('.app-reading');
+    if (!pane) return;
+    pane.setAttribute('data-inert', String(open));
+    return () => pane.setAttribute('data-inert', 'false');
+  }, [open]);
 
   return (
     <aside className="app-inspector" aria-label="Stats">
       <div className="app-inspector-head">
         <span>Stats</span>
-        <span className="flex items-center gap-0.5">
-          <button className="app-btn" onClick={refresh} aria-label="Refresh stats">
-            <RefreshCw className="size-3.5" aria-hidden />
-          </button>
-          <button className="app-btn" onClick={onClose} aria-label="Close stats panel">
-            <X className="size-3.5" aria-hidden />
-          </button>
-        </span>
+        <button className="app-btn" onClick={onClose} aria-label="Close stats panel">
+          <X className="size-3.5" aria-hidden />
+        </button>
       </div>
 
       <div className="app-inspector-body">
-        {snapshot.length ? (
-          <Blocks blocks={snapshot} cs={cs} gameId={gameId} className="prose-cs" />
+        {state.statsBlocks.length ? (
+          <Blocks blocks={state.statsBlocks} cs={cs} gameId={gameId} className="prose-cs" />
         ) : (
           <p className="app-note">Reading the character sheet…</p>
         )}
-
-        {interactive && (
+        {state.statsPending && (
+          <PendingView cs={cs} pending={state.statsPending} channel="stats" />
+        )}
+        {open && (
           <p className="app-note mt-4">
-            This game&rsquo;s stats screen asks for input.{' '}
-            <button className="app-btn px-0 underline" onClick={() => cs.openStats()}>
-              Open the full screen
-            </button>{' '}
-            to answer it.
+            The story is paused while the sheet is open. Close it to carry on.
           </p>
         )}
       </div>

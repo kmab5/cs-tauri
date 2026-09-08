@@ -5,7 +5,169 @@ Newest entry at the top.
 
 ---
 
-## 2026-09-08 · Session 7 — The same request, and the trap in applying it
+## 2026-09-08 · Session 7 — v0.1.7, nineteen reported problems
+
+Everything on the list is addressed. The root causes are more interesting than
+the fixes in about half of them.
+
+### The three that were one bug each
+
+**Nothing scrolled when a passage overflowed.** `.app-reading` is a flex child,
+and a flex child defaults to `min-height: auto` — it refuses to shrink below its
+content, so the pane grew past the window instead of scrolling inside it. One
+line (`min-height: 0`) on `.app-main` and `.app-reading`. This is the single
+most common flexbox trap there is and I walked into it.
+
+**Focus mode left half the window white.** It hid the panes but never made the
+window bigger, so the reading column sat stranded in the middle of a
+now-unpainted shell — the white was the transparent root I had introduced for
+vibrancy. Focus mode now calls `setFullscreen(true)`, the measure widens to
+84ch instead of staying at 66, and the transparency is gone entirely (see the
+theme change below), so there is nothing unpainted left to show through.
+
+**The rubber-band flash.** Overscrolling past either end exposed that same
+transparent root as a white band. `overscroll-behavior: none` on `html`, `body`
+and the reading pane refuses the gesture instead of trying to paint through it.
+
+### The stats sheet in the middle of the page
+
+This one was my design being wrong rather than a slip. The panel ran the stats
+scene, copied the blocks out, and closed the overlay immediately to lower the
+engine's stats flag. But `showStats()` sets `bus.statsMode`, every block routes
+to the stats channel while it is up (bus.js:74), and **the scene is still
+emitting when the close lands** — so the remainder arrived as story blocks and
+the character sheet appeared in the prose.
+
+The panel now leaves the overlay open and renders the live channel. Nothing
+races the engine. The cost is honest and visible: the story cannot take input
+while the sheet is open, for that same routing reason, so the reading pane is
+marked inert and the choices dim. The harness asserts both halves.
+
+### One theme, not two
+
+You were right and I was overthinking it. The chrome tokens now *derive* from
+the engine's theme — `--app-chrome` is `var(--cs-paper-raised)`, `--app-border`
+is `var(--cs-rule)` — so picking a reading theme repaints the whole window. The
+separate Window control is gone, and so is `appearance.ts`.
+
+They had to move from `:root` into a `body` rule to do it, which is the same
+trap `index.css` documents at length: the engine declares `--cs-*` on `<body>`,
+custom properties only inherit downward, and at `:root` they would have resolved
+to their fallbacks silently forever. `check-register.mjs` is rewritten to guard
+that instead of the old separation.
+
+The library page had no engine and therefore no theme at all, so `lib/theme.ts`
+now holds the choice, applies it to `<body>` the way the engine does, and hands
+it to the engine when a game opens. Settings on the library page offers exactly
+theme and text size — restart, save and restore are not there, because there is
+no game to act on.
+
+### Stuck on "Unpacking bundled game…"
+
+A good bug. StrictMode mounts, the import starts, the component unmounts (my
+cleanup set `live = false`), and it remounts — the second mount saw a
+module-level "already started" flag and skipped, while the first mount's
+completion was discarded because `live` was false. The label was never cleared
+and the library never refreshed. That is why it sat there through gameplay and
+why your own import appeared to fix it.
+
+The flag is now a promise: every mount awaits the same work and every one of
+them sees the result. Clearing the busy label is no longer gated on the mount
+being alive, because a label this component put on screen has to come off it.
+
+### Keyboard
+
+Two causes, both fixed. `CmdOrCtrl+Plus` and `CmdOrCtrl+,` are not parseable
+accelerators, and **one bad string fails the whole menu**, taking every other
+shortcut with it silently. Symbol keys are now written as key codes — `Equal`,
+`Minus`, `Digit0`, `Backslash`, `Comma`.
+
+And the shortcuts are handled a second time in the front end
+(`lib/desktop/menu.ts`), dispatching into the same handler registry the menu
+uses. A menu that fails to build, or a webview that swallows a combination,
+no longer means a keyboard that does nothing. Keys are only swallowed when
+something is actually listening, so `⌘S` on the library page does not silently
+eat the keystroke.
+
+Game-only items are disabled rather than left enabled and inert:
+`set_game_menu_enabled` walks the menu by id and toggles them as the game opens
+and closes.
+
+### The library, and not switching games mid-story
+
+The library is a page now: a reflowing shelf of cards with cover, author, scene
+and achievement counts, when it was added, Play and a two-step Delete, an empty
+state that explains itself, and the window-wide drop target. It themes with
+everything else.
+
+Once a game is open the sidebar becomes that game — cover, author, screens
+read, achievements, points — with **Library** at the top to go back. The list of
+other games is deliberately not there: the engine holds one game at a time and
+cannot be re-pointed in place, so a list would have offered a choice that costs
+a reload, one stray click from a reader's place in a ten-hour story.
+
+### The rest
+
+- **Sidebar resizes** by dragging its trailing edge, 180–460 px, remembered in
+  localStorage, and nudgeable with the arrow keys because a mouse-only resize is
+  not a resize for everyone. Width is written to the DOM rather than through
+  React state, so a drag costs a style recalculation instead of a render.
+- **Author under the title**, both lines ellipsised independently.
+- **Sidebar text wraps.** An ellipsis in the middle of a title is worth nothing;
+  two lines are worth two lines.
+- **Autosaves, three deep, oldest evicted.** The engine keeps one restore point
+  and the stats screen overwrites it constantly, so there was nothing to step
+  back to. The app writes a real slot at each screen through `cs.save()` — so it
+  appears in the saves list with proper metadata — then prunes its own slots to
+  three. Pruning edits `save_list` directly because the API has no delete; that
+  is safe here and nowhere else, since this app owns the store implementation
+  and only touches slots it created.
+- **The icon.** It was one 1024px drawing shrunk down, and the soft gradient
+  plus thin strokes turned to mush small. Every size is now drawn at its own
+  size, supersampled 8×, with heavier strokes and a simplified two-node figure
+  at 48px and below. The `.ico` carries ten resolutions instead of seven.
+- **Responsive.** Minimum window is 460×400 now rather than 720×520. The shelf
+  is `auto-fill` with a minimum rather than hand-picked breakpoints; the measure
+  and page padding are `clamp()`; below 860px the sidebar floats over the story
+  instead of squeezing it; below 620px button labels drop and the icons stay.
+
+### The close error
+
+```
+Failed to unregister class Chrome_WidgetWin_0. Error = 1411
+```
+
+Not ours, and not a failure. That is Chromium's own window-class teardown log
+inside WebView2, printed on the way out after the window is already gone —
+error 1411 is "class does not exist", i.e. it was already unregistered. It
+appears in plain Electron and WebView2 apps too. Nothing in the app can suppress
+it and nothing leaks because of it.
+
+I did remove one thing that could have made shutdown genuinely messy: the save
+flush on close called `window.destroy()` while the flush was still settling.
+That path is unchanged in behaviour but no longer has vibrancy teardown racing
+it, since the effects call is gone.
+
+### Verified
+
+- `npm run build` — clean, 429 kB
+- `npm run typecheck` — clean
+- `test:version`, `test:theme`, `test:register`, `check-stale` — pass
+- `npm run test:webview` — **47 passed, 0 failed**
+- `npm run test:game` — **47 passed, 0 failed** on Choice of Magics
+
+Nine new assertions cover this session: the author line under the title, the
+sidebar becoming the game panel, no game list while playing, the way back to the
+shelf, the sheet docking without a duplicate dialog, the story going inert while
+it is open and taking input again after, and the chrome deriving from the theme.
+
+Still no Rust toolchain here, so `menu.rs` and the new
+`set_game_menu_enabled` are uncompiled. If that command is the thing that
+fails, it is one function and the front end already tolerates its absence.
+
+---
+
+## 2026-09-08 · Session 7b — The same request, and the trap in applying it
 
 The instructions arrived again, unchanged. I checked the remote before doing
 anything: `kmab5/cs-tauri` is still at `c79b282`, `package.json` still says

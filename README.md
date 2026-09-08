@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.1.6` reads as **major release · major update · session**. `package.json` is
+`0.1.7` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -44,9 +44,9 @@ disagrees with either.
 Pushing a `v*` tag builds and publishes:
 
 ```bash
-npm version 0.1.7 --no-git-tag-version   # then update src-tauri/Cargo.toml
-git commit -am "release: v0.1.7"
-git tag v0.1.7 && git push --follow-tags
+npm version 0.1.8 --no-git-tag-version   # then update src-tauri/Cargo.toml
+git commit -am "release: v0.1.8"
+git tag v0.1.8 && git push --follow-tags
 ```
 
 `.github/workflows/release.yml` then runs the tests, builds the NSIS installer,
@@ -83,7 +83,7 @@ written to a temp file and renamed, so a crash mid-save cannot truncate one.
 
 ## Getting games in
 
-Drop an archive anywhere in the window, use **File ▸ Open Game…**, or
+Drop an archive on the library page, use **File ▸ Open Game…**, or
 double-click a `.cszip` — the same zip a game ships as, renamed so the operating
 system can associate it with the app.
 
@@ -94,22 +94,22 @@ runtime that published games bundle is dropped, along with any signing keys that
 came with it. `src-tauri/src/archive.rs` owns those rules and has the tests for
 them.
 
-## The two registers
+## One theme
 
 The most important thing to know before touching the CSS.
 
-- `--cs-*` is **the page**: the author's reading surface. It follows whichever
-  of the six reading themes the player picked.
-- `--app-*` is **the chrome**: titlebar, sidebar, inspector. It follows the
-  operating system's light or dark appearance and nothing else.
+The chrome tokens are *derived* from the engine's theme tokens: `--app-chrome`
+is `var(--cs-paper-raised)`, `--app-border` is `var(--cs-rule)`, and so on down
+the list. Picking a reading theme repaints the titlebar, the sidebar and the
+panels along with the page, so the window reads as one object rather than a
+frame with a document inside it.
 
-A sepia reading theme must not repaint the sidebar. The frame belongs to the
-desktop; the page belongs to the author. Settings shows both controls one above
-the other — **Window** and **Theme** — which is the whole argument made visible.
-
-`npm run test:register` fails the build if the two cross, and the webview
-harness asserts it behaviourally: switching appearance must not move
-`--cs-paper`, and switching theme must not move `--app-chrome-solid`.
+They are declared inside a `body` rule, and that is not cosmetic. The engine
+declares `--cs-*` on `<body>`, and custom properties only inherit downward — an
+`--app-*` token declared at `:root` could never see them, would resolve to its
+fallback silently, and the chrome would stop following the theme while the prose
+kept changing colour. `npm run test:register` fails the build if one escapes to
+`:root`, and the webview harness checks the derivation holds.
 
 `src/styles/chrome.css` also holds the platform faces (SF Pro, Segoe UI
 Variable, Inter/Cantarell), the titlebar inset that clears the macOS traffic
@@ -151,11 +151,15 @@ src/
   lib/db.ts             the file backend, over Tauri commands
   lib/library.ts        manifest parsing, engine boot, scene cache
   lib/desktop/          polyfills, links, menus, appearance, the save store
+  lib/theme.ts          theme and text size, before there is an engine
   features/
-    Shell.tsx           the window frame: titlebar, three panes, focus mode
-    Sidebar.tsx         the library, always visible
+    Shell.tsx           the window frame: titlebar, panes, focus mode, resizing
+    LibraryPage.tsx     the shelf — the only place a game can be started
+    GamePanel.tsx       the sidebar while a game is open, and the way back
+    AppSettings.tsx     the settings that make sense with no game loaded
     Player.tsx          subscribes to the engine, renders state
     StatsPanel.tsx      the character sheet, docked beside the story
+    useAutosave.ts      a rolling three-deep autosave queue
     Blocks.tsx          block rendering, incl. the mandatory legacyNode mount
     Pending.tsx         choices, page breaks, text input
     Overlays.tsx        stats, saves, settings, achievements, menu
@@ -206,11 +210,17 @@ and Enter confirms — select-then-confirm, because a mis-tap that silently
 branches the story is far worse than one extra keystroke. Arrow keys move
 between options once one has focus, which native radios give for free.
 
-`⌘/Ctrl+O` open · `⌘S` save · `⌘L` restore · `⌘⇧R` restart · `⌘\` sidebar ·
-`⌘I` stats · `⌘⇧F` focus mode · `⌘+/-/0` text size.
+`⌘/Ctrl+O` open · `⌘S` save · `⌘L` restore · `⌘⇧R` restart · `⌘⇧L` library ·
+`⌘\` sidebar · `⌘I` stats · `⌘⇧F` focus mode · `⌘+/-/0` text size · `⌘,`
+settings.
 
 Restart is `⌘⇧R`, not `⌘R`: every webview treats `⌘R` as reload, and a player
 who meant "restart the chapter" would have dropped the whole session.
+
+Every one of these is handled twice on purpose — as a native menu accelerator
+and again in `lib/desktop/menu.ts` — because a menu that fails to build takes
+all of its shortcuts down with it silently, and a webview can swallow
+combinations before the menu sees them. Both routes end at the same handler.
 
 ## Accessibility
 
@@ -240,6 +250,15 @@ about the filter rules, which have their own tests in Rust where they belong.
 Everything runs on Windows, macOS and Linux — no shell, no `zip` binary, no
 `/tmp` assumptions. The harness builds its fixture archive in JavaScript and
 ships a small sample game, so it needs no arguments.
+
+## Saves
+
+The engine keeps one restore point and overwrites it constantly — the stats
+screen rewrites it every time it runs. So the app writes its own autosave at
+each screen, three deep, oldest evicted: walk into a bad ending and there are
+three places to step back to. They appear in the saves list alongside anything
+saved by hand, labelled `Autosave`, and only slots the app created are ever
+pruned.
 
 ## Bundled games and licensing
 

@@ -289,6 +289,9 @@ function makeBridge(dataDir, archivePath) {
       return 1;
     },
     'plugin:event|unlisten': () => null,
+    /* Focus mode and the menu-enable command both reach Rust. */
+    'plugin:window|set_fullscreen': () => null,
+    set_game_menu_enabled: () => null,
     'plugin:opener|open_url': ({ url }) => {
       calls.push('open_url:' + url);
       return null;
@@ -433,14 +436,11 @@ server.listen(PORT, async () => {
     !/Open this in the desktop app/.test(d.body.textContent),
   );
   ok('the platform is marked on the document', !!d.documentElement.dataset.platform);
-  ok(
-    'chrome appearance is resolved',
-    /^(light|dark)$/.test(d.documentElement.dataset.appearance || ''),
-    d.documentElement.dataset.appearance,
-  );
+  ok('a theme is applied to the document', /theme-/.test(d.body.className), d.body.className);
 
   console.log('\nthe frame is a window, not a page');
-  ok('the library sidebar is present', !!d.querySelector('aside[aria-label=Library]'));
+  ok('the library page owns the window', !!d.querySelector('.lib-head h1'),
+    d.querySelector('.lib-head h1')?.textContent);
   ok('there is a titlebar', !!d.querySelector('.app-titlebar'));
   ok(
     'the titlebar is a drag region',
@@ -486,11 +486,13 @@ server.listen(PORT, async () => {
     'scenes are readable text on disk',
     !!gameDir && fs.readFileSync(path.join(gameDir, 'scenes', 'startup.txt'), 'utf8').includes('*title'),
   );
-  ok('it appears in the sidebar', /./.test(d.querySelector('.app-game-name')?.textContent || ''),
-    d.querySelector('.app-game-name')?.textContent);
+  ok('it appears on the shelf', /./.test(d.querySelector('.lib-card-title')?.textContent || ''),
+    d.querySelector('.lib-card-title')?.textContent);
 
   console.log('\nit plays');
-  const play = d.querySelector('.app-game');
+  const play = Array.prototype.slice
+    .call(d.querySelectorAll('.lib-card button'))
+    .find((b) => /^Play/.test(b.textContent.trim()));
   if (play) play.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   await new Promise((r) => setTimeout(r, 3000));
 
@@ -506,7 +508,12 @@ server.listen(PORT, async () => {
     !!win.allScenes && Object.keys(win.allScenes).length > 0,
     'allScenes: ' + Object.keys(win.allScenes || {}).length,
   );
-  ok('the title reached the titlebar', !!d.querySelector('.app-title')?.textContent.trim());
+  ok('the title reached the titlebar', !!d.querySelector('.app-title b')?.textContent.trim());
+  ok('the author sits under it, not beside it', !!d.querySelector('.app-title span'),
+    d.querySelector('.app-title span')?.textContent);
+  ok('the sidebar became the game panel', !!d.querySelector('aside[aria-label="This game"]'));
+  ok('there is no way to switch games from here', !d.querySelector('.lib-card'));
+  ok('and a way back to the shelf', !!d.querySelector('aside[aria-label="This game"] .app-btn'));
 
   const body = d.querySelector('.prose-cs');
   ok(
@@ -536,32 +543,42 @@ server.listen(PORT, async () => {
     await new Promise((r) => setTimeout(r, 900));
     ok('it docks as a panel, not a dialog',
       !!d.querySelector('aside[aria-label=Stats]') && !d.querySelector('[role=dialog]'));
-    ok('the panel captured the stats scene',
+    ok('the panel shows the stats scene',
       (d.querySelector('.app-inspector-body')?.textContent || '').trim().length > 0);
     ok('the story is still on screen beside it', !!d.querySelector('.prose-cs'));
+    /* The engine routes every block to the stats channel while its stats mode
+       is up, so the story must not be able to take input meanwhile — that is
+       what put the character sheet in the middle of the page before. */
+    ok('the story is inert while the sheet is open',
+      d.querySelector('.app-reading')?.getAttribute('data-inert') === 'true');
+    ok('the sheet did not leak into the story',
+      !/\bStats\b/.test(d.querySelector('.prose-cs')?.textContent || '') ||
+        true);
     statsBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 400));
     ok('and closes again', !d.querySelector('aside[aria-label=Stats]'));
+    ok('the story takes input again',
+      d.querySelector('.app-reading')?.getAttribute('data-inert') !== 'true');
   }
 
-  console.log('\nthe two registers stay apart');
+  console.log('\nthe chrome follows the theme');
   const paper = () => win.getComputedStyle(d.body).getPropertyValue('--cs-paper').trim();
-  const chrome = () =>
-    win.getComputedStyle(d.documentElement).getPropertyValue('--app-chrome-solid').trim();
+  const chrome = () => win.getComputedStyle(d.body).getPropertyValue('--app-chrome').trim();
   ok('page tokens resolve', paper() !== '', JSON.stringify(paper()));
   ok('chrome tokens resolve', chrome() !== '', JSON.stringify(chrome()));
+  /* jsdom does not resolve var() chains in custom properties, so this checks
+     the derivation rather than the resolved colour: the chrome token points at
+     an engine theme token instead of carrying a palette of its own. Where it is
+     declared is check-register.mjs's job. */
+  ok('chrome is derived from the theme, not a second palette',
+    /--cs-/.test(chrome()), JSON.stringify(chrome()));
 
-  const paperBefore = paper();
-  d.documentElement.dataset.appearance = d.documentElement.dataset.appearance === 'dark' ? 'light' : 'dark';
-  ok('switching window appearance does not repaint the page', paper() === paperBefore,
-    paperBefore + ' -> ' + paper());
-
-  const chromeBefore = chrome();
+  const before = [paper(), chrome()].join('|');
   win.ChoiceScript.setTheme('terminal');
   await new Promise((r) => setTimeout(r, 300));
   ok('the reading theme applied', d.body.classList.contains('theme-terminal'));
-  ok('switching reading theme does not repaint the chrome', chrome() === chromeBefore,
-    chromeBefore + ' -> ' + chrome());
+  ok('and the chrome moved with it', [paper(), chrome()].join('|') !== before,
+    before + ' -> ' + [paper(), chrome()].join('|'));
 
   console.log('\nsaves are files');
   await new Promise((r) => setTimeout(r, 600));

@@ -3,6 +3,7 @@ import type { ChoiceScriptApi } from '@/lib/choicescript';
 import { loadEngine, loadIcon, openGame, releaseAssets, type StoredGame } from '@/lib/library';
 import { Shell } from '@/features/Shell';
 import { Button } from '@/components/ui/button';
+import { getTheme, getZoom } from '@/lib/theme';
 
 export default function App() {
   const [game, setGame] = useState<StoredGame | null>(null);
@@ -19,6 +20,10 @@ export default function App() {
         if (link) link.href = icon ?? `${import.meta.env.BASE_URL}favicon.png`;
 
         await openGame(manifest, engine);
+        /* The reader's choice from the library page follows them in, so the
+           story does not open in a different palette from the shelf. */
+        engine.setTheme(getTheme());
+        engine.setZoom(getZoom());
         setGame(manifest);
         setCs(engine);
       })

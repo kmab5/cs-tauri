@@ -2,13 +2,13 @@
  * The platform layer.
  *
  * Imported once, first, from `main.tsx`: installs the webview polyfills, the
- * external-link handler, the file-backed save store and the chrome appearance,
- * then marks the document with the platform so CSS can branch on it.
+ * external-link handler and the file-backed save store, applies the stored
+ * theme, and marks the document with the platform so CSS can branch on it.
  */
 import { installPolyfills } from './polyfills';
 import { installLinkHandler } from './links';
 import { installFileStore } from './store';
-import { installAppearance } from './appearance';
+import { applyTheme } from '../theme';
 
 export type Platform = 'macos' | 'windows' | 'linux';
 
@@ -44,7 +44,9 @@ if (hasTauri()) {
   installPolyfills();
   installLinkHandler();
   installFileStore();
-  installAppearance();
+  /* Before React paints: the library page has no engine to theme it, so the
+     stored choice is applied to <body> here. */
+  applyTheme();
 }
 
 if (typeof document !== 'undefined') {

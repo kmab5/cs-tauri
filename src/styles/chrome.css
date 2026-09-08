@@ -1,89 +1,64 @@
 /*
- * The chrome register.
+ * The chrome.
  *
- * The application has two visual registers and they must not mix.
+ * One theme, not two. The chrome tokens are *derived* from the engine's own
+ * theme tokens, so picking a reading theme repaints the titlebar, the sidebar
+ * and the panels along with the page. That is what was asked for, and it makes
+ * the window feel like one object instead of a frame with a document inside it.
  *
- *   --cs-*   the page. The author's reading surface. Follows the reading theme
- *            the player picked, all six of them, and nothing else.
- *   --app-*  the chrome. Titlebar, sidebar, inspector, menus. Follows the
- *            operating system's light or dark appearance, and nothing else.
- *
- * The frame belongs to the operating system and should not turn sepia because
- * the reader likes sepia for prose. Keeping the two apart is the whole reason
- * this file exists separately from index.css.
- *
- * scripts/check-register.mjs fails the build if the two registers cross.
+ * They are declared inside `body` for a reason that is not cosmetic: the engine
+ * declares --cs-* on <body>, and custom properties only inherit downward. An
+ * --app-* token declared at :root could never see them and would silently
+ * resolve to its fallback forever — the same trap index.css documents at
+ * length. scripts/check-register.mjs fails the build if one escapes to :root.
  */
 
-:root {
-  /* Light appearance. Neutral rather than tinted: chrome should read as part
-     of the window, not as part of the book. */
-  --app-chrome-solid: #f3f2f0;
-  --app-chrome-elev: #ffffff;
-  --app-chrome-sunken: #e9e8e5;
-  --app-border: rgba(0, 0, 0, 0.11);
-  --app-border-strong: rgba(0, 0, 0, 0.18);
-  --app-label: #1d1d1f;
-  --app-label-dim: #6c6c72;
-  --app-accent: #2f5fb5;
-  --app-accent-fg: #ffffff;
-  --app-accent-wash: rgba(47, 95, 181, 0.12);
-  --app-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.08);
+body {
+  --app-chrome: var(--cs-paper-raised, #f5f3ee);
+  --app-chrome-elev: var(--cs-paper, #edeae4);
+  --app-chrome-sunken: color-mix(in srgb, var(--cs-rule, #d5d0c5) 40%, var(--cs-paper-raised, #f5f3ee));
+  --app-border: var(--cs-rule, #d5d0c5);
+  --app-border-strong: color-mix(in srgb, var(--cs-rule, #d5d0c5) 70%, var(--cs-ink, #22201c));
+  --app-label: var(--cs-ink, #22201c);
+  --app-label-dim: var(--cs-ink-muted, #5a554c);
+  --app-accent: var(--cs-accent, #2f3e6b);
+  --app-accent-fg: var(--cs-accent-ink, #ffffff);
+  --app-accent-wash: var(--cs-accent-wash, #dfe3ec);
+  --app-shadow: 0 1px 3px color-mix(in srgb, var(--cs-ink, #22201c) 14%, transparent),
+    0 8px 24px color-mix(in srgb, var(--cs-ink, #22201c) 10%, transparent);
 
-  --app-chrome: var(--app-chrome-solid);
-
-  --app-titlebar-h: 44px;
+  --app-titlebar-h: 48px;
   --app-titlebar-inset: 0px;
   --app-control-h: 28px;
-  --app-radius: 6px;
+  --app-radius: var(--cs-radius, 4px);
+  /* Set by the sidebar's resize handle and remembered across launches. */
   --app-sidebar-w: 260px;
   --app-inspector-w: 320px;
 
   --app-font-ui: system-ui, sans-serif;
 }
 
-[data-appearance='dark'] {
-  --app-chrome-solid: #1f1f22;
-  --app-chrome-elev: #2b2b2f;
-  --app-chrome-sunken: #171719;
-  --app-border: rgba(255, 255, 255, 0.1);
-  --app-border-strong: rgba(255, 255, 255, 0.18);
-  --app-label: #f2f2f5;
-  --app-label-dim: #9b9ba2;
-  --app-accent: #6f9de8;
-  --app-accent-fg: #10131a;
-  --app-accent-wash: rgba(111, 157, 232, 0.16);
-  --app-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.32);
-}
-
 /* Platform faces. The reading surface keeps the engine's serif families; only
-   the chrome takes the system UI font, because that is what makes a window
-   look like it belongs to the desktop it is running on. */
-[data-platform='macos'] {
+   the chrome takes the system UI font, because that is what makes a window look
+   like it belongs to the desktop it is running on. */
+[data-platform='macos'] body {
   --app-font-ui: -apple-system, 'SF Pro Text', BlinkMacSystemFont, system-ui, sans-serif;
-  --app-radius: 7px;
   --app-titlebar-h: 52px;
   /* Clears the traffic lights, which the overlay titlebar draws over our bar. */
   --app-titlebar-inset: 78px;
 }
-[data-platform='windows'] {
+[data-platform='windows'] body {
   --app-font-ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
-  --app-radius: 4px;
 }
-[data-platform='linux'] {
+[data-platform='linux'] body {
   --app-font-ui: Inter, Cantarell, 'Noto Sans', system-ui, sans-serif;
 }
 
 /*
- * Density.
- *
- * 44px is the WCAG 2.1 AA target size for touch, and the web build keeps it
- * everywhere. Under a cursor the same figure reads as a phone app stretched
- * over a desktop, so the shell tightens to 28px — and gives it straight back
- * on a touchscreen, which a Windows laptop may well have.
+ * Density. 44px is the WCAG 2.1 AA target size for touch and is given straight
+ * back on a touchscreen, which a Windows laptop may well have. Under a cursor
+ * the same figure reads as a phone app stretched over a desktop.
  */
-/* Unlayered, so it beats Tailwind's @theme declaration whatever the
-   specificity: layered styles always lose to unlayered ones. */
 :root {
   --spacing-touch: 28px;
 }
@@ -93,40 +68,44 @@
   }
 }
 
-html {
-  /* Vibrancy needs the window to show through, so nothing paints the root.
-     The reading theme's paper lives on .app-main instead, which is the only
-     surface that should have carried it in the first place. */
-  background: transparent;
-}
+/*
+ * The rubber-band. Overscrolling past either end of a scroller used to stretch
+ * the view and expose the window behind it as a white band before snapping
+ * back. Refusing the gesture outright is the only fix that leaves no flash.
+ */
+html,
 body {
-  background: transparent;
+  height: 100%;
   overscroll-behavior: none;
 }
-
-/* Where the platform gives us a translucent window, the chrome uses it. Every
-   surface below still has an opaque colour underneath, because Linux has no
-   equivalent and older Windows does not get Mica. */
-[data-platform='macos'],
-[data-platform='windows'] {
-  --app-chrome: color-mix(in srgb, var(--app-chrome-solid) 72%, transparent);
+body {
+  background-color: var(--cs-paper, #edeae4);
 }
 
 /* ------------------------------------------------------------------ layout */
 
 .app-shell {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   height: 100vh;
   height: 100dvh;
+  min-height: 0;
   overflow: hidden;
+  background: var(--app-chrome-elev);
   font-family: var(--app-font-ui);
   color: var(--app-label);
 }
 
+/*
+ * min-height: 0 is the whole reason the reading pane scrolls at all. A flex
+ * child defaults to min-height: auto, which refuses to shrink below its
+ * content — so .app-reading grew past the window instead of scrolling inside
+ * it, and long passages simply could not be reached.
+ */
 .app-main {
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex-direction: column;
   background: var(--cs-paper, #edeae4);
 }
@@ -135,14 +114,37 @@ body {
    unreadable, and the brief is that the page recedes, not that it dissolves. */
 .app-reading {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+/*
+ * While the sheet is docked the story is readable but inert. The engine routes
+ * every block to the stats channel for as long as its stats mode is up
+ * (bus.js:74), so a choice answered underneath an open sheet would have its
+ * result swallowed and the story would appear to stop.
+ */
+.app-reading[data-inert='true'] {
+  pointer-events: none;
+}
+.app-reading[data-inert='true'] .cs-choices,
+.app-reading[data-inert='true'] form {
+  opacity: 0.45;
 }
 
 .app-measure {
   margin: 0 auto;
-  max-width: var(--cs-measure, 66ch);
-  padding: 1.5rem 2rem 6rem;
+  /* min() so a narrow window shrinks the measure instead of clipping it. */
+  max-width: min(var(--cs-measure, 66ch), 100%);
+  padding: 1.5rem clamp(1rem, 4vw, 2rem) 6rem;
+}
+
+/* Focus mode has the whole window, so the measure widens rather than leaving
+   two empty margins the width of the panes that just closed. */
+[data-focus='true'] .app-measure {
+  max-width: min(84ch, 100%);
 }
 
 /* --------------------------------------------------------------- titlebar */
@@ -157,13 +159,21 @@ body {
   padding-right: 0.75rem;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-chrome);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  backdrop-filter: saturate(180%) blur(20px);
 }
 
+/* Title over author, not title then author. Two short lines read faster than
+   one long one, and the author is the author's credit rather than part of the
+   title. */
 .app-title {
+  display: flex;
   min-width: 0;
   flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.15;
+}
+.app-title b {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -172,8 +182,12 @@ body {
   letter-spacing: -0.01em;
 }
 .app-title span {
-  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--app-label-dim);
+  font-size: 0.6875rem;
+  font-weight: 400;
 }
 
 /* ---------------------------------------------------------------- controls */
@@ -229,8 +243,10 @@ body {
 /* ----------------------------------------------------------------- sidebar */
 
 .app-sidebar {
+  position: relative;
   display: flex;
   width: var(--app-sidebar-w);
+  min-width: 0;
   flex-direction: column;
   border-right: 1px solid var(--app-border);
   background: var(--app-chrome);
@@ -315,19 +331,19 @@ body {
   min-width: 0;
   flex: 1;
 }
+/* Wrapped, not truncated. A long title in a narrow sidebar is worth two lines;
+   an ellipsis in the middle of it is worth nothing. */
 .app-game-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   font-size: 0.8125rem;
   font-weight: 500;
+  line-height: 1.3;
 }
 .app-game-sub {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   color: var(--app-label-dim);
   font-size: 0.75rem;
+  line-height: 1.35;
 }
 
 /* --------------------------------------------------------------- inspector */
@@ -387,7 +403,7 @@ body {
   z-index: 60;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--app-chrome-solid) 82%, transparent);
+  background: color-mix(in srgb, var(--app-chrome) 88%, transparent);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -424,4 +440,231 @@ body {
 [data-tauri-drag-region] {
   cursor: default;
   user-select: none;
+}
+
+/* ------------------------------------------------------------- resize grip */
+
+/*
+ * The sidebar's width is the player's, not ours. Dragged here, remembered in
+ * localStorage, clamped so it can neither disappear nor eat the reading column.
+ */
+.app-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  z-index: 5;
+  width: 6px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: col-resize;
+}
+.app-resizer:hover,
+.app-resizer[data-dragging='true'] {
+  background: var(--app-accent-wash);
+}
+.app-resizer:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: -2px;
+}
+
+/* ------------------------------------------------------------ game details */
+
+.app-detail {
+  padding: 0.875rem 0.75rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.app-detail-cover {
+  width: 100%;
+  max-width: 160px;
+  border-radius: var(--app-radius);
+  background: var(--app-chrome-sunken);
+}
+.app-detail h2 {
+  margin: 0.75rem 0 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.app-detail p {
+  margin: 0.25rem 0 0;
+  color: var(--app-label-dim);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.app-detail dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 1rem 0 0;
+  font-size: 0.75rem;
+}
+.app-detail dt {
+  color: var(--app-label-dim);
+}
+.app-detail dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------- library page */
+
+/*
+ * The library is a page, not a placeholder. It gets the whole window when no
+ * game is open, themes with everything else, and is the only place a game can
+ * be chosen — once one is open the sidebar shows that game instead, so there is
+ * no way to swap games out from under a running interpreter by accident.
+ */
+.lib {
+  margin: 0 auto;
+  max-width: min(72rem, 100%);
+  padding: clamp(1.5rem, 5vw, 3rem) clamp(1rem, 4vw, 2.5rem) 4rem;
+}
+.lib-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--app-border);
+  padding-bottom: 1rem;
+}
+.lib-head h1 {
+  margin: 0;
+  font-family: var(--app-font-ui);
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.lib-head p {
+  margin: 0.25rem 0 0;
+  color: var(--app-label-dim);
+  font-family: var(--app-font-ui);
+  font-size: 0.8125rem;
+}
+
+.lib-grid {
+  display: grid;
+  /* auto-fill with a minimum, so the shelf reflows at any window width rather
+     than at three hand-picked breakpoints. */
+  grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.lib-card {
+  display: flex;
+  gap: 0.875rem;
+  border: 1px solid var(--app-border);
+  border-radius: calc(var(--app-radius) * 2);
+  background: var(--app-chrome);
+  padding: 0.875rem;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+.lib-card:hover {
+  border-color: var(--app-accent);
+  transform: translateY(-1px);
+}
+.lib-card:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 2px;
+}
+.lib-cover {
+  display: grid;
+  height: 72px;
+  width: 56px;
+  flex-shrink: 0;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--app-radius);
+  background: var(--app-chrome-sunken);
+  object-fit: cover;
+  color: var(--app-label-dim);
+  font-family: var(--app-font-ui);
+  font-size: 1.25rem;
+}
+.lib-card-body {
+  min-width: 0;
+  font-family: var(--app-font-ui);
+}
+.lib-card-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.lib-card-meta {
+  margin: 0.25rem 0 0;
+  color: var(--app-label-dim);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.lib-card-actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.lib-empty {
+  border: 2px dashed var(--app-border);
+  border-radius: calc(var(--app-radius) * 2);
+  padding: clamp(2rem, 8vw, 4rem) 1.5rem;
+  text-align: center;
+  font-family: var(--app-font-ui);
+}
+.lib-empty p {
+  margin: 0 0 1rem;
+  color: var(--app-label-dim);
+  font-size: 0.875rem;
+}
+
+/* ------------------------------------------------------------- responsive */
+
+/*
+ * One rule per thing that actually breaks, keyed to the width where it breaks,
+ * rather than a set of device-shaped breakpoints. Below 860px the sidebar and
+ * the reading column cannot both have room, so the sidebar goes.
+ */
+@media (max-width: 860px) {
+  .app-sidebar {
+    position: absolute;
+    top: var(--app-titlebar-h);
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    box-shadow: var(--app-shadow);
+  }
+  .app-resizer {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  body {
+    --app-titlebar-h: 44px;
+    --app-titlebar-inset: 0px;
+  }
+  .app-titlebar {
+    gap: 0.125rem;
+    padding-right: 0.375rem;
+  }
+  /* Labels are the first thing to go, not the control itself. */
+  .app-btn-label {
+    display: none;
+  }
+}
+
+@media (max-height: 480px) {
+  .app-measure {
+    padding-bottom: 3rem;
+  }
 }

@@ -7,14 +7,18 @@
  * (`statsBlocks` / `statsPending`), so it can never overwrite the story.
  */
 import { useEffect, useState } from 'react';
-import type { ChoiceScriptApi, ChoiceScriptState, SaveRecord } from '@/lib/choicescript';
+import type {
+  ChoiceScriptApi,
+  ChoiceScriptState,
+  OverlayName,
+  SaveRecord,
+} from '@/lib/choicescript';
 import { Blocks } from './Blocks';
 import { PendingView } from './Pending';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DialogPanel } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { getAppearance, setAppearance, type Appearance } from '@/lib/desktop/appearance';
 
 interface ScreenProps {
   cs: ChoiceScriptApi;
@@ -158,31 +162,8 @@ function Chips({
 
 function Settings({ cs, state }: { cs: ChoiceScriptApi; state: ChoiceScriptState }) {
   const { theme } = state;
-  /*
-   * Window appearance is a separate setting from the reading theme, and the two
-   * sitting one above the other is the design argument made visible: Window
-   * paints the frame and follows the operating system, Theme paints the
-   * author's page and follows the reader. Re-read on open rather than held in
-   * state — it lives in localStorage, and nothing else can change it while the
-   * dialog is up.
-   */
-  const [appearance, setAppearanceState] = useState<Appearance>(() => getAppearance());
-
   return (
     <div>
-      <Chips
-        legend="Window"
-        items={[
-          { id: 'auto', label: 'Match system' },
-          { id: 'light', label: 'Light' },
-          { id: 'dark', label: 'Dark' },
-        ]}
-        current={appearance}
-        onPick={(id) => {
-          setAppearance(id as Appearance);
-          setAppearanceState(id as Appearance);
-        }}
-      />
       <Chips legend="Theme" items={cs.themes()} current={theme.name} onPick={cs.setTheme} />
       <Chips
         legend="Brightness"
@@ -295,8 +276,19 @@ const TITLES: Record<string, string> = {
   menu: 'Menu',
 };
 
-export function Overlays({ cs, state, gameId }: ScreenProps) {
-  const open = state.overlay;
+export function Overlays({
+  cs,
+  state,
+  gameId,
+  suppress,
+}: ScreenProps & { suppress?: OverlayName }) {
+  /*
+   * The docked stats panel renders the same channel this dialog does, from the
+   * same open overlay. Both at once would put the sheet on screen twice and
+   * trap focus in the copy nobody is looking at, so the host that is showing it
+   * tells us to stand down.
+   */
+  const open = state.overlay === suppress ? null : state.overlay;
   return (
     <DialogPanel
       open={!!open}

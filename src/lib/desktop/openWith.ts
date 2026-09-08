@@ -23,35 +23,43 @@ export interface ImportHandlers {
 }
 
 /**
- * Module scope, not a ref: React's StrictMode runs effects twice in
- * development, and two overlapping first-run imports would both find the
- * marker absent and install the bundled games twice.
+ * The bundled import, once per process, as a promise rather than a flag.
+ *
+ * A flag plus a mount-scoped `live` guard is what left the app stuck on
+ * "Unpacking bundled game…" forever: StrictMode mounts, starts the import,
+ * unmounts (setting live = false), and remounts — the second mount saw the flag
+ * and skipped, while the first mount's completion was discarded because its
+ * effect had been cleaned up. Nothing ever cleared the label and the library
+ * never refreshed.
+ *
+ * Holding the promise means every mount, however many there are, awaits the
+ * same work and every one of them sees the result.
  */
-let bundledStarted = false;
+let bundled: Promise<StoredGame[]> | null = null;
 
 export function useDesktopImports(handlers: ImportHandlers) {
   const latest = useRef(handlers);
   latest.current = handlers;
 
   useEffect(() => {
-    let live = true;
 
     const run = async (label: string, work: () => Promise<StoredGame[]>) => {
       latest.current.onBusy?.(label);
       try {
         const games = await work();
-        if (live && games.length) latest.current.onImported(games);
+        if (games.length) latest.current.onImported(games);
       } catch (e) {
-        if (live) latest.current.onError?.((e as Error).message);
+        latest.current.onError?.((e as Error).message);
       } finally {
-        if (live) latest.current.onBusy?.(null);
+        /* Not gated on `live`. A label this component set has to be cleared
+           even if the component is gone, or it stays on screen for the rest of
+           the session — which is exactly what happened. */
+        latest.current.onBusy?.(null);
       }
     };
 
-    if (!bundledStarted) {
-      bundledStarted = true;
-      void run('the bundled game', importBundled);
-    }
+    bundled ??= importBundled();
+    void run('the bundled game', () => bundled!);
 
     void pendingArchives().then((paths) => {
       for (const path of paths) {
@@ -64,7 +72,6 @@ export function useDesktopImports(handlers: ImportHandlers) {
     });
 
     return () => {
-      live = false;
       void unlisten.then((off) => off());
     };
   }, []);

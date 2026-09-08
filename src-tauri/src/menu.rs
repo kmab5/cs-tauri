@@ -7,13 +7,20 @@
 //! One accelerator is deliberately absent. `CmdOrCtrl+R` is reload in every
 //! webview, and a player who meant "restart the chapter" would instead drop
 //! the whole session, so restart is bound to `CmdOrCtrl+Shift+R`.
+//!
+//! Symbol keys are written as key codes — `Equal`, `Minus`, `Digit0`,
+//! `Backslash`, `Comma` — not as the characters they produce. `Plus` and `,`
+//! are not parseable accelerators, and one unparseable string fails the whole
+//! menu, which takes every other shortcut down with it silently. The front end
+//! also handles these combinations itself (lib/desktop/menu.ts), so a menu that
+//! fails to build no longer means a keyboard that does nothing.
 
 use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 /* Only the application menu uses this, and that menu is macOS-only. Importing
    it unconditionally warns on every Windows and Linux build. */
 #[cfg(target_os = "macos")]
 use tauri::menu::AboutMetadata;
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let open = MenuItemBuilder::new("Open Game…")
@@ -44,7 +51,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
     let sidebar = MenuItemBuilder::new("Toggle Sidebar")
         .id("toggle-sidebar")
-        .accelerator("CmdOrCtrl+\\")
+        .accelerator("CmdOrCtrl+Backslash")
         .build(app)?;
     let stats = MenuItemBuilder::new("Toggle Stats")
         .id("toggle-stats")
@@ -52,15 +59,15 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build(app)?;
     let zoom_in = MenuItemBuilder::new("Larger Text")
         .id("zoom-in")
-        .accelerator("CmdOrCtrl+Plus")
+        .accelerator("CmdOrCtrl+Equal")
         .build(app)?;
     let zoom_out = MenuItemBuilder::new("Smaller Text")
         .id("zoom-out")
-        .accelerator("CmdOrCtrl+-")
+        .accelerator("CmdOrCtrl+Minus")
         .build(app)?;
     let zoom_reset = MenuItemBuilder::new("Actual Size")
         .id("zoom-reset")
-        .accelerator("CmdOrCtrl+0")
+        .accelerator("CmdOrCtrl+Digit0")
         .build(app)?;
     let focus = MenuItemBuilder::new("Focus Mode")
         .id("toggle-focus")
@@ -68,7 +75,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build(app)?;
     let settings = MenuItemBuilder::new("Settings…")
         .id("settings")
-        .accelerator("CmdOrCtrl+,")
+        .accelerator("CmdOrCtrl+Comma")
         .build(app)?;
 
     let mut items: Vec<&dyn tauri::menu::IsMenuItem<R>> = Vec::new();
@@ -138,4 +145,26 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     items.push(&window);
 
     Menu::with_items(app, &items)
+}
+
+/// The items that only mean something while a game is running.
+///
+/// Disabled on the library page rather than left enabled and inert: the menu is
+/// where a reader looks to find out what is possible right now, and offering
+/// Restart with no game open is a lie about the state of the app.
+const GAME_ITEMS: &[&str] = &["save", "restore", "restart", "achievements", "toggle-stats", "toggle-focus", "library"];
+
+#[tauri::command]
+pub fn set_game_menu_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let Some(menu) = app.menu() else {
+        return Ok(());
+    };
+    for id in GAME_ITEMS {
+        if let Some(item) = menu.get(*id) {
+            if let Some(item) = item.as_menuitem() {
+                item.set_enabled(enabled).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    Ok(())
 }
