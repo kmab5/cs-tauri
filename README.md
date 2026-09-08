@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.1.11` reads as **major release · major update · session**. `package.json` is
+`0.2.0` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -44,9 +44,9 @@ disagrees with either.
 Pushing a `v*` tag builds and publishes:
 
 ```bash
-npm version 0.1.12 --no-git-tag-version   # then update src-tauri/Cargo.toml
-git commit -am "release: v0.1.12"
-git tag v0.1.12 && git push --follow-tags
+npm version 0.2.1 --no-git-tag-version   # then update src-tauri/Cargo.toml
+git commit -am "release: v0.2.1"
+git tag v0.2.1 && git push --follow-tags
 ```
 
 `.github/workflows/release.yml` then runs the tests, builds the NSIS installer,
@@ -60,6 +60,47 @@ it looks like it worked.
 | `.exe` (NSIS) | Normal install, no administrator rights needed |
 | `.msi` | Managed or scripted deployment |
 | `-portable-x64.zip` | No install at all — unzip and run |
+
+## Shipping one game as its own app
+
+Drop an archive in `stories/` and build it into a standalone app — the same
+player with the shelf removed:
+
+```bash
+npm run cs:export -- --game sordwin.cszip --out dist-apps/sordwin \
+  --portable --nsis --msi
+```
+
+| Flag | |
+| --- | --- |
+| `--game <path>` | the archive to ship; bare names resolve against `stories/` |
+| `--out <dir>` | where the artefacts land |
+| `--portable` `--nsis` `--msi` | what to build; at least one is required |
+| `--name` `--version` `--identifier` | override what goes on the window and the installer |
+| `--icon` | derive the app icon from the game's own cover art |
+| `--skip-tests` | build without the test pass |
+| `--keep` | leave the staged tree in place, for debugging |
+
+The product name, version and identifier come from the game — `*title` and
+`*author` out of its `startup.txt` — so the installer says *Sordwin: The
+Evertree Saga*, not *ChoiceScript Player*.
+
+**Nothing is forked.** A standalone app is this app with one archive in
+`src-tauri/games/` and one extra resource, `standalone.json`. The mode is read
+at runtime through the `app_mode` command, so both kinds of build are the same
+code and the same binary — there is no second frontend to keep in step, and
+`npm run test:standalone` exercises the single-game mode from the ordinary
+build by mocking that one answer.
+
+In standalone mode there is no shelf, no importing, no `.cszip` file
+association, and no route back to a library that does not exist — the palette,
+the menu bar and the sidebar all drop those commands rather than offering
+something inert.
+
+`cs:export` stages two files inside `src-tauri/` and puts the tree back
+afterwards, including on Ctrl-C. Tests run before the compile, and the webview
+harness runs against **the archive being shipped** rather than the fixture, so a
+game that cannot be unpacked or played fails the build instead of shipping.
 
 ## Where everything lives
 

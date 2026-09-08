@@ -114,6 +114,15 @@ export async function setMenuVisible(visible: boolean): Promise<void> {
   }
 }
 
+/** Greys out File ▸ Open and Back to Library in a standalone build. */
+export async function setLibraryMenuEnabled(enabled: boolean): Promise<void> {
+  try {
+    await invoke('set_library_menu_enabled', { enabled });
+  } catch {
+    /* an older build without the command keeps them enabled */
+  }
+}
+
 export async function setGameMenuEnabled(enabled: boolean): Promise<void> {
   try {
     await invoke('set_game_menu_enabled', { enabled });

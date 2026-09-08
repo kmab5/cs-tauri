@@ -25,7 +25,7 @@ import {
 import type { ChoiceScriptApi } from '@/lib/choicescript';
 import type { StoredGame } from '@/lib/library';
 import { useMenu } from '@/lib/desktop/menu';
-import { setGameMenuEnabled, setMenuVisible } from '@/lib/desktop/menu';
+import { setGameMenuEnabled, setLibraryMenuEnabled, setMenuVisible } from '@/lib/desktop/menu';
 import { Player } from './Player';
 import { GamePanel } from './GamePanel';
 import { LibraryPage } from './LibraryPage';
@@ -230,11 +230,14 @@ export function Shell({
   cs,
   onPlay,
   onExit,
+  standalone = false,
 }: {
   game: StoredGame | null;
   cs: ChoiceScriptApi | null;
   onPlay: (game: StoredGame) => void;
   onExit: () => void;
+  /** A single-game build: no shelf, no importing, no way back to a list. */
+  standalone?: boolean;
 }) {
   const [sidebar, setSidebar] = useState(true);
   const [inspector, setInspector] = useState(false);
@@ -302,7 +305,8 @@ export function Shell({
      enabled and inert. */
   useEffect(() => {
     void setGameMenuEnabled(!!game && !!cs);
-  }, [game, cs]);
+    void setLibraryMenuEnabled(!standalone);
+  }, [game, cs, standalone]);
 
   /*
    * One registry, three surfaces: the palette runs the same handlers the menu
@@ -321,7 +325,17 @@ export function Shell({
           { id: 'focus', group: 'View', label: focus ? 'Leave focus mode' : 'Focus mode', hint: keyHint('mod+shift+f'), run: () => setFocus((on) => !on) },
           { id: 'sidebar', group: 'View', label: sidebar ? 'Hide sidebar' : 'Show sidebar', hint: keyHint('mod+\\'), run: () => setSidebar((on) => !on) },
           { id: 'panel', group: 'View', label: docked ? 'Hide achievements panel' : 'Show achievements panel', hint: keyHint('mod+i'), run: () => (wide ? setInspector((on) => !on) : cs.openAchievements()) },
-          { id: 'library', group: 'Go', label: 'Back to the library', hint: keyHint('mod+shift+l'), run: onExit },
+          ...(standalone
+            ? []
+            : [
+                {
+                  id: 'library',
+                  group: 'Go',
+                  label: 'Back to the library',
+                  hint: keyHint('mod+shift+l'),
+                  run: onExit,
+                },
+              ]),
         ]
       : [{ id: 'app-settings', group: 'App', label: 'Settings', hint: keyHint('mod+,'), run: () => setAppSettings(true) }]),
   ];
@@ -332,7 +346,7 @@ export function Shell({
     'toggle-panel': () =>
       game && cs ? (wide ? setInspector((on) => !on) : cs.openAchievements()) : undefined,
     'toggle-focus': () => game && setFocus((on) => !on),
-    library: () => (game ? onExit() : undefined),
+    library: () => (game && !standalone ? onExit() : undefined),
     /* On the library page Settings means the app's settings, not a running
        game's — there is no game to restart or save. */
     settings: () => (game && cs ? undefined : setAppSettings(true)),
@@ -353,7 +367,7 @@ export function Shell({
       </a>
 
       {game && !focus && sidebar && (
-        <GamePanel game={game} cs={cs} onExit={onExit}>
+        <GamePanel game={game} cs={cs} onExit={standalone ? null : onExit}>
           <Resizer edge="left" label="Resize the sidebar" onWidth={resize} />
         </GamePanel>
       )}

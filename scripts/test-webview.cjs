@@ -13,7 +13,12 @@
  * those have their own tests in Rust, which is where they belong.
  *
  * Needs jsdom (a dev dependency).
- * Run: node scripts/test-webview.cjs [path/to/game.cszip]
+ * Run: node scripts/test-webview.cjs [path/to/game.cszip] [--standalone]
+ *
+ * `--standalone` mocks the backend into the single-game mode that
+ * `npm run cs:export` produces: one game shipped inside the app, no shelf, no
+ * importing. Both modes run the same build, which is the whole reason the mode
+ * is a runtime answer from Rust rather than a compile-time flag.
  */
 'use strict';
 
@@ -229,7 +234,7 @@ function importArchive(dataDir, bytes, source) {
 }
 
 /** The command table. Each entry is one #[tauri::command] on the Rust side. */
-function makeBridge(dataDir, archivePath) {
+function makeBridge(dataDir, archivePath, archiveBytes) {
   const listeners = new Map(); // event name -> Set of callback ids
   const callbacks = new Map(); // id -> fn
   let nextCallback = 1;
@@ -238,8 +243,15 @@ function makeBridge(dataDir, archivePath) {
   const gameDir = (id) => path.join(dataDir, 'games', id);
 
   const commands = {
+    app_mode: () =>
+      standalone
+        ? { standalone: true, title: 'The Bundled Story', author: 'A. Tester' }
+        : { standalone: false },
     take_pending_archives: () => [],
-    take_bundled: () => [],
+    /* In a standalone build the game ships inside the app, so the first-run
+       import is where it comes from — there is no file input to use. */
+    take_bundled: () =>
+      standalone ? [importArchive(dataDir, archiveBytes, 'bundled.cszip')] : [],
     import_archive: (args, options) =>
       importArchive(
         dataDir,
@@ -374,10 +386,12 @@ function finish(code) {
 
 /* -------------------------------------------------------------------- run */
 
-const arg = process.argv[2];
+const standalone = process.argv.includes('--standalone');
+const arg = process.argv.slice(2).find((a) => !a.startsWith('--'));
 const archive = arg ? fs.readFileSync(arg) : makeZip(SAMPLE);
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cs-appdata-'));
 console.log(arg ? `\nusing ${arg}` : '\nusing the built-in sample game');
+if (standalone) console.log('mode: standalone (one game, no library)');
 console.log(`app data in ${dataDir}`);
 
 server.listen(PORT, async () => {
@@ -392,7 +406,7 @@ server.listen(PORT, async () => {
 
   /* The bridge has to exist before any application script runs: main.tsx
      checks for it, and the store installs itself off the back of it. */
-  const bridge = makeBridge(dataDir, arg);
+  const bridge = makeBridge(dataDir, arg, archive);
   win.__TAURI_INTERNALS__ = bridge.internals;
   /* @tauri-apps/api reaches for this directly when unlistening, without a
      guard, so an absent one throws inside a cleanup nobody can catch. */
@@ -454,6 +468,40 @@ server.listen(PORT, async () => {
   );
   ok('the platform is marked on the document', !!d.documentElement.dataset.platform);
   ok('a theme is applied to the document', /theme-/.test(d.body.className), d.body.className);
+
+  if (standalone) {
+    console.log('\nit is one game, not a library');
+    ok('no shelf is rendered at all', !d.querySelector('.lib-head'));
+    ok('no shelf card exists to switch games with', !d.querySelector('.lib-card'));
+    ok('nothing offers to import another archive', !d.querySelector('input[type=file]'));
+    ok('the game opened by itself', typeof win.ChoiceScript === 'object');
+    ok('its title is in the titlebar', !!d.querySelector('.app-title b')?.textContent.trim(),
+      d.querySelector('.app-title b')?.textContent);
+    ok('the sidebar has no way back to a library',
+      !Array.prototype.slice
+        .call(d.querySelectorAll('aside[aria-label="This game"] button'))
+        .some((b) => /Library/.test(b.textContent)));
+    ok('the story is on screen', !!d.querySelector('.prose-cs'));
+
+    const palBtn = Array.prototype.slice
+      .call(d.querySelectorAll('.app-titlebar button'))
+      .find((b) => /Command palette/.test(b.getAttribute('aria-label') || ''));
+    if (palBtn) {
+      palBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 500));
+      const labels = Array.prototype.slice
+        .call(d.querySelectorAll('.pal-item-label'))
+        .map((e) => e.textContent);
+      ok('the palette offers the game commands', labels.length >= 5, labels.length + ' commands');
+      ok('and not "Back to the library"', !labels.some((l) => /library/i.test(l)),
+        labels.join(' · '));
+      win.document.dispatchEvent(
+        new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    return finish(fail ? 1 : 0);
+  }
 
   console.log('\nthe frame is a window, not a page');
   ok('the library page owns the window', !!d.querySelector('.lib-head h1'),

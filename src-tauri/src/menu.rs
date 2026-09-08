@@ -177,6 +177,25 @@ pub fn set_game_menu_enabled(app: AppHandle, enabled: bool) -> Result<(), String
     Ok(())
 }
 
+/// Grey out the library items in a standalone build.
+///
+/// A single-game app has no shelf to go back to and no second archive to open,
+/// so offering either is a lie about what the app can do.
+#[tauri::command]
+pub fn set_library_menu_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let Some(menu) = app.menu() else {
+        return Ok(());
+    };
+    for id in ["open-game", "library"] {
+        if let Some(item) = menu.get(id) {
+            if let Some(item) = item.as_menuitem() {
+                item.set_enabled(enabled).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Hide the menu bar entirely, for focus mode.
 ///
 /// The bar belongs to the window, so the front end cannot reach it — and

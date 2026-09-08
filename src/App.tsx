@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ChoiceScriptApi } from '@/lib/choicescript';
 import {
   loadEngine,
@@ -11,11 +11,14 @@ import {
 import { Shell } from '@/features/Shell';
 import { Button } from '@/components/ui/button';
 import { getTheme, getZoom } from '@/lib/theme';
+import { loadMode, type AppMode } from '@/lib/mode';
+import { importBundled, listGames } from '@/lib/library';
 
 export default function App() {
   const [game, setGame] = useState<StoredGame | null>(null);
   const [cs, setCs] = useState<ChoiceScriptApi | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<AppMode | null>(null);
 
   const open = useCallback((manifest: StoredGame) => {
     setError(null);
@@ -38,6 +41,34 @@ export default function App() {
       .catch((e: Error) => setError(e.message));
   }, []);
 
+  /*
+   * A standalone build has one game and no shelf, so there is nothing to pick:
+   * import whatever shipped inside the app, then open it. The library build
+   * skips all of this and renders the shelf as before.
+   */
+  useEffect(() => {
+    let live = true;
+    void loadMode().then(async (m) => {
+      if (!live) return;
+      setMode(m);
+      if (!m.standalone) return;
+      try {
+        await importBundled();
+        const games = await listGames();
+        if (!live) return;
+        if (!games.length) {
+          return setError('This app ships a game, but it could not be unpacked.');
+        }
+        open(games[0]);
+      } catch (e) {
+        if (live) setError((e as Error).message);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [open]);
+
   if (error) {
     return (
       <div className="app-measure py-10">
@@ -56,8 +87,23 @@ export default function App() {
 
   /* The frame keeps the library alongside the story, so it renders whether or
      not a game is open. */
+  /* Nothing renders until the mode is known: a shelf that flashes up for a
+     frame in a single-game app is worse than a moment of nothing. */
+  if (!mode) return null;
+
+  if (mode.standalone && (!game || !cs)) {
+    return (
+      <div className="app-measure py-10 font-ui">
+        <p className="app-note" role="status">
+          Opening {mode.title ?? 'the story'}…
+        </p>
+      </div>
+    );
+  }
+
   return (
     <Shell
+      standalone={mode.standalone}
       game={game}
       cs={cs}
       onPlay={(manifest) => {

@@ -70,7 +70,8 @@ export function GamePanel({
 }: {
   game: StoredGame;
   cs: ChoiceScriptApi | null;
-  onExit: () => void;
+  /** null in a standalone build: there is no library to go back to. */
+  onExit: (() => void) | null;
   /** The width grip, which has to live inside the panel it resizes. */
   children?: React.ReactNode;
 }) {
@@ -120,15 +121,19 @@ export function GamePanel({
   return (
     <aside className="app-sidebar" aria-label="This game">
       <div className="app-sidebar-head" data-tauri-drag-region>
-        <button
-          className="app-btn"
-          data-tauri-drag-region="false"
-          onClick={onExit}
-          title="Back to the library (Ctrl+Shift+L)"
-        >
-          <ChevronLeft className="size-3.5" aria-hidden />
-          <span className="app-btn-label">Library</span>
-        </button>
+        {onExit ? (
+          <button
+            className="app-btn"
+            data-tauri-drag-region="false"
+            onClick={onExit}
+            title="Back to the library (Ctrl+Shift+L)"
+          >
+            <ChevronLeft className="size-3.5" aria-hidden />
+            <span className="app-btn-label">Library</span>
+          </button>
+        ) : (
+          <span>{game.author || 'This game'}</span>
+        )}
       </div>
 
       <div className="app-panes" ref={panes} data-dragging={dragging}>

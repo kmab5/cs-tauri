@@ -67,3 +67,12 @@ pids
 debug.log
 TODO.md
 .aider*
+# Written by `npm run cs:export` while it builds a single-game app, and removed
+# again when it finishes. Present here only if a build was interrupted.
+src-tauri/standalone.json
+src-tauri/tauri.standalone.conf.json
+src-tauri/.games-stash/
+dist-apps/
+# The cs:export inbox. Keep the README, never the games.
+stories/*
+!stories/README.md

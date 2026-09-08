@@ -151,6 +151,14 @@ Target WCAG 2.1 AA.
 - Dialogs come from Radix: focus trap, Escape, `aria-modal`.
 - No icon-only control without an `aria-label`; no emoji used as an icon.
 
+## Two modes
+
+The same interface runs as a library app and as a single-game app. Standalone
+mode removes rather than replaces: no shelf, no import affordance, no back
+button, and the palette and menu drop those commands instead of greying them.
+Everything else — the panes, the reading surface, the palette, the shortcuts —
+is identical, because it is the same build.
+
 ## Guards
 
 `npm test` runs, in order: the build, version agreement, `check-theme-scope`

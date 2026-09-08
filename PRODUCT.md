@@ -75,6 +75,16 @@ WCAG 2.1 AA throughout. Native form controls, `role="meter"` on stat bars,
 story, and every text pair at 4.5:1 or better across all twelve theme variants.
 The engine also offers a dyslexia-friendly face and four text sizes.
 
+## Standalone builds
+
+An author or a curator can ship one story as its own app: same player, shelf
+removed, the game's name on the window and the installer. `npm run cs:export`
+is the CLI; the GUI equivalent — an export button beside a game — is the next
+step, and it will call the same code path.
+
+This is why the library/standalone distinction is a runtime fact rather than a
+build flag: one codebase, one binary, two modes, both tested.
+
 ## Open questions
 
 - Is the shelf's poster grid right, or should the library default to a dense

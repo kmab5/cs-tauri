@@ -266,6 +266,42 @@ pub fn import_bundled(app: &AppHandle) -> Result<Vec<ImportResult>, String> {
     Ok(out)
 }
 
+/// What kind of app this build is.
+///
+/// A standalone build — one produced by `npm run cs:export` — ships exactly one
+/// game and no library. The distinction is a *resource file* rather than a
+/// compile-time flag so both modes run the same binary and the same bundle: the
+/// front end asks at boot, and the test harness can mock the answer without a
+/// second build.
+#[derive(Serialize, Default)]
+pub struct AppMode {
+    pub standalone: bool,
+    /// The game's title, for the window and the About box.
+    pub title: Option<String>,
+    pub author: Option<String>,
+}
+
+#[tauri::command]
+pub fn app_mode(app: AppHandle) -> AppMode {
+    let Ok(path) = app
+        .path()
+        .resolve("standalone.json", tauri::path::BaseDirectory::Resource)
+    else {
+        return AppMode::default();
+    };
+    let Ok(bytes) = std::fs::read(&path) else {
+        return AppMode::default();
+    };
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return AppMode::default();
+    };
+    AppMode {
+        standalone: true,
+        title: value.get("title").and_then(|v| v.as_str()).map(str::to_string),
+        author: value.get("author").and_then(|v| v.as_str()).map(str::to_string),
+    }
+}
+
 /// Called by the front end once it is ready to receive them.
 #[tauri::command]
 pub async fn take_bundled(app: AppHandle) -> Result<Vec<ImportResult>, String> {

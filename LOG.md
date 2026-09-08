@@ -5,6 +5,107 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 11 — v0.2.0, one game as its own app
+
+### The shape of it
+
+A standalone app is **not a fork**. It is this app with one archive in
+`src-tauri/games/` and one extra resource file, `standalone.json`. The mode is a
+runtime answer from Rust (`app_mode`), not a compile-time flag.
+
+That choice is the whole design, and it buys three things:
+
+1. One codebase and one binary. There is no second frontend to keep in step,
+   which is the failure mode every "export as app" feature eventually has.
+2. **Both modes are testable from the ordinary build.** `npm run test:standalone`
+   mocks that single answer and gets the real single-game interface — 15
+   assertions, no Rust compile, no second bundle.
+3. The GUI version later is the same code path with a button in front of it.
+
+### The CLI
+
+```bash
+npm run cs:export -- --game sordwin.cszip --out dist-apps/sordwin \
+  --portable --nsis --msi
+```
+
+`stories/` is the inbox; bare names resolve against it. `--location` and
+`--output` are accepted as aliases for `--game` and `--out`, because that is
+what your message used and muscle memory outlives docs.
+
+Name, version and identifier come from the game itself — `*title` and `*author`
+out of `startup.txt` — so the installer says *Sordwin: The Evertree Saga*, not
+*ChoiceScript Player*. `--name`, `--version` and `--identifier` override.
+`--icon` runs the game's own cover art through `tauri icon`, and says so and
+carries on if the cover is not a large square PNG.
+
+Beyond what you asked for, and each for a reason:
+
+- **Tests run against the archive being shipped**, not the fixture. The webview
+  harness is pointed at the actual `.cszip`, so a game that cannot be unpacked
+  or played fails the build rather than shipping. Then the theme and register
+  guards, then `cargo test`.
+- **`BUILD.json`** beside the artefacts: title, author, version, scene count,
+  platform, player version, and a short sha256 per file. A build you can
+  identify six months later.
+- **No `.cszip` association** in a standalone build. A single-game app has
+  nothing to do with someone else's archive.
+- **Exactly one game ships.** The staged `games/` folder is emptied first; a
+  stray second archive would be imported on first run and the "standalone" app
+  would open with two games in it.
+- **The workspace is restored in a `finally`**, and on SIGINT/SIGTERM, because
+  the compile takes minutes and Ctrl-C is likely.
+- `--portable` assembles a tree with the executable, `games/`, `standalone.json`
+  and the icons beside it, which is where Tauri resolves resources for an
+  unpackaged binary. The executable is globbed rather than named, since Tauri
+  derives the binary name from `productName`.
+
+### Two bugs, both found by running it
+
+**The archive can live in the folder being stashed.** `src-tauri/games/` is
+where a bundled game already sits, so `--game src-tauri/games/x.cszip` is the
+obvious first thing to type — and staging moves that whole directory aside,
+pulling the source out from under the copy. It now reads the bytes before
+touching anything. The first run failed exactly this way, and the `finally`
+restored the tree correctly while doing so, which was the other thing worth
+knowing.
+
+**`--portable` alone still needs a compile.** Without any `--bundles` Tauri
+builds every default installer; with `--no-bundle` it compiles and stops. The
+flag is passed only when no installer was asked for.
+
+### The mode in the interface
+
+Standalone removes rather than replaces. No shelf, no file input, no drop
+target, no back button; the palette and the menu bar *drop* those commands
+rather than greying them out, because an inert menu item is a lie about what the
+app can do. `set_library_menu_enabled` handles the native side. The sidebar's
+back button becomes the author's name.
+
+Boot order matters: nothing renders until the mode is known. A shelf that
+flashes up for one frame in a single-game app is worse than a moment of nothing.
+
+### Verified
+
+- `npm run test:standalone` — **15 passed, 0 failed** (no shelf, no import
+  affordance, the game opens itself, its title in the titlebar, no library route
+  in the sidebar or the palette)
+- `npm run test:webview` — **73 passed, 0 failed**
+- `npm run test:game` — **68 passed, 0 failed** on Choice of Magics
+- `cs:export` — staging, marker, config overlay and restore all verified by
+  running it; the compile step is the only part that cannot run here, for want
+  of cargo
+- build, typecheck, theme-scope, register, stale, version, detector — pass
+
+### Next
+
+Run it on Windows for real: `npm run cs:export -- --game choice-of-magics.cszip
+--out dist-apps/com --portable --nsis --icon`. Once that produces an installer
+you are happy with, the GUI export button is a thin wrapper — the same
+`app_mode` contract, driven from a Rust command instead of a shell.
+
+---
+
 ## 2026-09-08 · Session 10b — v0.1.11, the direction your answers implied
 
 "Sharp tool, Linear/Raycast-like" and "avoid Kindle beige" together are a bigger
