@@ -10,3 +10,4 @@ src-tauri/target/
 src-tauri/gen/
 # Bundled game archives are licensed content; keep them local.
 src-tauri/games/*.cszip
+!choice-of-magics.cszip
