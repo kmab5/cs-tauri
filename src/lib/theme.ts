@@ -13,16 +13,25 @@
 export interface ThemeChoice {
   id: string;
   label: string;
+  hint?: string;
 }
 
-/** The engine's six. It exposes the same list at runtime via cs.themes(). */
+/**
+ * The engine's six, copied from `engine/core/settings.js:13` — ids and hints
+ * both. Three of the ids in the previous version of this list (slate, sepia,
+ * high-contrast) did not exist in the engine at all, so picking them from the
+ * library page set a class nothing styled and the theme silently did not
+ * change. The engine exposes the same list at runtime through `cs.themes()`,
+ * which is what the in-game settings dialog uses; this copy exists only for the
+ * library page, where there is no engine yet.
+ */
 export const THEMES: ThemeChoice[] = [
-  { id: 'parchment', label: 'Parchment' },
-  { id: 'nocturne', label: 'Nocturne' },
-  { id: 'terminal', label: 'Terminal' },
-  { id: 'slate', label: 'Slate' },
-  { id: 'sepia', label: 'Sepia' },
-  { id: 'high-contrast', label: 'High contrast' },
+  { id: 'paperback', label: 'Paperback', hint: 'Warm stock, ink indigo' },
+  { id: 'terminal', label: 'Terminal', hint: 'Phosphor green on black' },
+  { id: 'nocturne', label: 'Nocturne', hint: 'Deep navy, low glare' },
+  { id: 'manuscript', label: 'Manuscript', hint: 'High-contrast parchment' },
+  { id: 'newsprint', label: 'Newsprint', hint: 'Flat grey, plain white' },
+  { id: 'ember', label: 'Ember', hint: 'Dark slate, warm amber' },
 ];
 
 const THEME_KEY = 'cs-app-theme';
@@ -37,8 +46,17 @@ export function setFace(id: string) {
   localStorage.setItem(FACE_KEY, id);
 }
 
+/**
+ * Nocturne by default, not the warm stock.
+ *
+ * The chrome derives from the reading theme, so the default theme is also the
+ * app's first impression — and a warm paper default made the whole window read
+ * as a beige e-reader, which is the one thing this is meant not to look like.
+ * Nocturne is dark, low-glare and neutral; every other theme is one click away
+ * for readers who want the paper.
+ */
 export function getTheme(): string {
-  return localStorage.getItem(THEME_KEY) || THEMES[0].id;
+  return localStorage.getItem(THEME_KEY) || 'nocturne';
 }
 
 export function setTheme(id: string) {

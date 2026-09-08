@@ -66,8 +66,16 @@ body {
 
   --app-titlebar-h: 48px;
   --app-titlebar-inset: 0px;
-  --app-control-h: 28px;
-  --app-radius: var(--cs-radius, 4px);
+  --app-control-h: 26px;
+  /*
+   * A tool's corners. The engine's --cs-radius is a reading-surface value and
+   * runs up to 8px in the softer themes; chrome caps at 3px so panels read as
+   * machined rather than upholstered. This is where "sharp" comes from —
+   * geometry and density, not hue, since the colour still belongs to whichever
+   * theme the reader picked.
+   */
+  --app-radius: 3px;
+  --app-radius-lg: 4px;
   /* Set by the sidebar's resize handle and remembered across launches. */
   --app-sidebar-w: 260px;
   --app-inspector-w: 320px;
@@ -81,7 +89,7 @@ body {
    like it belongs to the desktop it is running on. */
 [data-platform='macos'] body {
   --app-font-ui: -apple-system, 'SF Pro Text', BlinkMacSystemFont, system-ui, sans-serif;
-  --app-titlebar-h: 52px;
+  --app-titlebar-h: 48px;
   /* Clears the traffic lights, which the overlay titlebar draws over our bar. */
   --app-titlebar-inset: 78px;
 }
@@ -121,6 +129,21 @@ body {
 }
 
 /* ------------------------------------------------------------------ layout */
+
+/*
+ * Every number in the chrome is data — counts, scores, times, line numbers — so
+ * all of it is tabular. Proportional digits make a column of counts wobble,
+ * which is exactly the imprecision this direction is trying to remove.
+ */
+.app-badge,
+.app-fact b,
+.app-save-meta,
+.lib-count,
+.lib-card-meta,
+.lib-recent-when,
+.app-note {
+  font-variant-numeric: tabular-nums;
+}
 
 .app-shell {
   display: grid;
@@ -260,8 +283,16 @@ body {
   color: var(--app-accent);
 }
 .app-btn[aria-pressed='true'] {
-  background: var(--app-accent-wash);
-  color: var(--app-accent);
+  background: var(--app-accent);
+  color: var(--app-accent-fg);
+}
+.app-btn:active {
+  background: var(--app-accent);
+  color: var(--app-accent-fg);
+}
+.app-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .app-btn:focus-visible {
   outline: 2px solid var(--app-accent);
@@ -553,6 +584,144 @@ body {
   user-select: none;
 }
 
+/* ----------------------------------------------------------- key hints */
+
+/*
+ * Shortcuts printed where the action is. A keyboard-first app that keeps its
+ * bindings in a menu nobody opens is not keyboard-first; it is a mouse app with
+ * accelerators.
+ */
+kbd,
+.app-kbd {
+  border: 1px solid var(--app-border);
+  border-radius: 2px;
+  background: var(--app-chrome-sunken);
+  padding: 0 var(--app-1);
+  color: var(--app-label-dim);
+  font-family: var(--cs-font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.app-chip-hint {
+  display: block;
+  color: var(--app-label-dim);
+  font-size: var(--app-text-xs);
+}
+
+/* --------------------------------------------------------- command palette */
+
+/*
+ * One place to reach everything, on ⌘K.
+ *
+ * The alternative is what was here: eight controls in a titlebar, a menu bar,
+ * and a set of accelerators a reader has to learn from a README. A palette
+ * makes the whole surface searchable, which is the difference between an app
+ * that has shortcuts and one that is keyboard-first.
+ */
+.pal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-scrim);
+  background: color-mix(in srgb, var(--cs-ink, #000) 40%, transparent);
+}
+.pal {
+  position: fixed;
+  top: 14vh;
+  left: 50%;
+  z-index: var(--z-modal);
+  display: flex;
+  width: min(34rem, calc(100vw - var(--app-5)));
+  max-height: 60vh;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--app-border-strong);
+  border-radius: var(--app-radius-lg);
+  background: var(--app-chrome);
+  box-shadow: var(--app-shadow);
+  font-family: var(--app-font-ui);
+  transform: translateX(-50%);
+}
+.pal-input {
+  height: 38px;
+  flex-shrink: 0;
+  border: 0;
+  border-bottom: 1px solid var(--app-border);
+  background: transparent;
+  padding: 0 var(--app-3);
+  color: var(--app-label);
+  font: inherit;
+  font-size: var(--app-text-lg);
+}
+.pal-input:focus {
+  outline: none;
+}
+.pal-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--app-1);
+}
+.pal-group {
+  padding: var(--app-2) var(--app-2) var(--app-1);
+  color: var(--app-label-dim);
+  font-size: var(--app-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.pal-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--app-2);
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  padding: var(--app-2);
+  color: var(--app-label);
+  font: inherit;
+  font-size: var(--app-text-md);
+  text-align: left;
+  cursor: default;
+}
+/* Selection follows the arrow keys, so it is the row that is highlighted, not
+   the row under the pointer. */
+.pal-item[data-active='true'] {
+  background: var(--app-accent);
+  color: var(--app-accent-fg);
+}
+.pal-item[data-active='true'] kbd {
+  border-color: color-mix(in srgb, var(--app-accent-fg) 40%, transparent);
+  background: transparent;
+  color: var(--app-accent-fg);
+}
+.pal-item-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pal-empty {
+  padding: var(--app-4) var(--app-2);
+  color: var(--app-label-dim);
+  font-size: var(--app-text-md);
+  text-align: center;
+}
+.pal-foot {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--app-3);
+  border-top: 1px solid var(--app-border);
+  padding: var(--app-1) var(--app-3);
+  color: var(--app-label-dim);
+  font-size: var(--app-text-xs);
+}
+
 /* ------------------------------------------------------------- resize grip */
 
 /*
@@ -739,8 +908,8 @@ body {
 
 .lib-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(clamp(8rem, 18vw, 11rem), 1fr));
-  gap: clamp(0.75rem, 2vw, 1.5rem);
+  grid-template-columns: repeat(auto-fill, minmax(clamp(7.5rem, 15vw, 9.5rem), 1fr));
+  gap: var(--app-3);
   margin-top: clamp(1rem, 3vw, 2rem);
 }
 
@@ -750,7 +919,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--app-border);
-  border-radius: calc(var(--app-radius) * 2);
+  border-radius: var(--app-radius-lg);
   background: var(--app-chrome);
   padding: 0;
   color: inherit;

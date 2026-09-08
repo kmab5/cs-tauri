@@ -645,11 +645,52 @@ server.listen(PORT, async () => {
     !!manifest && games.length === 1 &&
       !!JSON.parse(fs.readFileSync(path.join(gameDir, 'manifest.json'), 'utf8')).lastPlayedAt);
 
+  console.log('\nthe command palette');
+  const palBtn = Array.prototype.slice
+    .call(d.querySelectorAll('.app-titlebar button'))
+    .find((b) => /Command palette/.test(b.getAttribute('aria-label') || ''));
+  ok('the palette has a visible control, not just a shortcut', !!palBtn);
+  if (palBtn) {
+    palBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 500));
+    ok('it opens as a dialog', !!d.querySelector('.pal[role=dialog]'),
+      d.querySelector('.pal') ? 'no role' : 'no .pal');
+    ok('it is labelled for screen readers',
+      !!d.querySelector('.pal')?.getAttribute('aria-label') ||
+        !!d.querySelector('.pal .sr-only'));
+    const items = d.querySelectorAll('.pal-item');
+    ok('it lists the commands available now', items.length >= 5, items.length + ' commands');
+    ok('the first row is selected, ready for Enter',
+      d.querySelector('.pal-item[data-active=true]') === items[0]);
+    const input = d.querySelector('.pal-input');
+    ok('it has a search field', !!input);
+    if (input) {
+      /* React tracks the value on the DOM node, so assigning .value directly
+         is swallowed as a no-op change. Go through the native setter. */
+      const setValue = Object.getOwnPropertyDescriptor(
+        win.HTMLInputElement.prototype,
+        'value',
+      ).set;
+      setValue.call(input, 'zzzz');
+      input.dispatchEvent(new win.Event('input', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 250));
+      ok('a query with no matches says so', !!d.querySelector('.pal-empty'));
+    }
+    win.document.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await new Promise((r) => setTimeout(r, 350));
+  }
+
   console.log('\nthe design system holds');
   const varOf = (name) => win.getComputedStyle(d.body).getPropertyValue(name).trim();
   ok('the spacing scale is declared', varOf('--app-2') === '8px', varOf('--app-2'));
   ok('the type scale is declared', varOf('--app-text-md') !== '', varOf('--app-text-md'));
   ok('the z-index ladder is declared', varOf('--z-modal') !== '', varOf('--z-modal'));
+  /* Chrome corners are capped independently of the reading surface: the softer
+     themes run --cs-radius up to 8px, which reads as upholstery in a toolbar. */
+  ok('chrome geometry is its own', varOf('--app-radius') === '3px', varOf('--app-radius'));
+  ok('a theme the engine actually has is applied',
+    /theme-(paperback|terminal|nocturne|manuscript|newsprint|ember)\b/.test(d.body.className),
+    d.body.className);
   ok('there is a skip link to the story', !!d.querySelector('a.app-skip[href="#story"]'));
   ok('the story is a main landmark', !!d.querySelector('main.app-reading#story'));
   /* The old save row carried a 3px left accent border — the detector's top AI

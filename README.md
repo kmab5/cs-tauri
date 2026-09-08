@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.1.10` reads as **major release · major update · session**. `package.json` is
+`0.1.11` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -44,9 +44,9 @@ disagrees with either.
 Pushing a `v*` tag builds and publishes:
 
 ```bash
-npm version 0.1.11 --no-git-tag-version   # then update src-tauri/Cargo.toml
-git commit -am "release: v0.1.11"
-git tag v0.1.11 && git push --follow-tags
+npm version 0.1.12 --no-git-tag-version   # then update src-tauri/Cargo.toml
+git commit -am "release: v0.1.12"
+git tag v0.1.12 && git push --follow-tags
 ```
 
 `.github/workflows/release.yml` then runs the tests, builds the NSIS installer,
@@ -96,7 +96,7 @@ them.
 
 ## The design system
 
-`DESIGN.md` documents the visual system as built — the two surfaces, the colour
+`PRODUCT.md` says who this is for and what it must not look like; `DESIGN.md` documents the visual system as built — the two surfaces, the colour
 roles, the fixed type scale, the 8px spacing unit, the z-index ladder, motion
 tokens and the accessibility targets. Read it before changing any of them; the
 guards in `npm test` enforce the parts that can be checked mechanically.
@@ -217,7 +217,7 @@ and Enter confirms — select-then-confirm, because a mis-tap that silently
 branches the story is far worse than one extra keystroke. Arrow keys move
 between options once one has focus, which native radios give for free.
 
-`⌘/Ctrl+O` open · `⌘S` save · `⌘L` restore · `⌘⇧R` restart · `⌘⇧L` library ·
+`⌘/Ctrl+K` command palette — everything the app can do, searchable · `⌘O` open · `⌘S` save · `⌘L` restore · `⌘⇧R` restart · `⌘⇧L` library ·
 `⌘\` sidebar · `⌘I` stats · `⌘⇧F` focus mode · `⌘+/-/0` text size · `⌘,`
 settings.
 

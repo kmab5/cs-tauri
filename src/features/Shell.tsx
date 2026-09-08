@@ -11,7 +11,16 @@
  */
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { BarChart3, Bookmark, Maximize2, Minimize2, PanelLeft, Settings2, Trophy } from 'lucide-react';
+import {
+  BarChart3,
+  Bookmark,
+  Command as CommandIcon,
+  Maximize2,
+  Minimize2,
+  PanelLeft,
+  Settings2,
+  Trophy,
+} from 'lucide-react';
 
 import type { ChoiceScriptApi } from '@/lib/choicescript';
 import type { StoredGame } from '@/lib/library';
@@ -22,6 +31,7 @@ import { GamePanel } from './GamePanel';
 import { LibraryPage } from './LibraryPage';
 import { AchievementsPanel } from './AchievementsPanel';
 import { AppSettings } from './AppSettings';
+import { Palette, keyHint, type Command } from './Palette';
 import { readScroll, saveScroll, useReadingKeys } from './useReadingKeys';
 import { useAutosave } from './useAutosave';
 import { setFace, setTheme, setZoom } from '@/lib/theme';
@@ -230,6 +240,7 @@ export function Shell({
   const [inspector, setInspector] = useState(false);
   const [focus, setFocus] = useState(false);
   const [appSettings, setAppSettings] = useState(false);
+  const [palette, setPalette] = useState(false);
   const [width, setWidth] = useState(() => {
     const stored = Number(localStorage.getItem(SIDEBAR.key));
     return Number.isFinite(stored) && stored >= SIDEBAR.min ? stored : 260;
@@ -293,7 +304,30 @@ export function Shell({
     void setGameMenuEnabled(!!game && !!cs);
   }, [game, cs]);
 
+  /*
+   * One registry, three surfaces: the palette runs the same handlers the menu
+   * bar and the titlebar buttons do, so a command cannot work in one place and
+   * not another.
+   */
+  const commands: Command[] = [
+    ...(game && cs
+      ? [
+          { id: 'stats', group: 'Game', label: 'Stats screen', hint: keyHint('mod+shift+s'), run: () => cs.openStats() },
+          { id: 'saves', group: 'Game', label: 'Saves', run: () => cs.openSaves() },
+          { id: 'save', group: 'Game', label: 'Save now', hint: keyHint('mod+s'), run: () => cs.openSaves() },
+          { id: 'ach', group: 'Game', label: 'Achievements', hint: keyHint('mod+shift+a'), run: () => cs.openAchievements() },
+          { id: 'restart', group: 'Game', label: 'Restart from the beginning', hint: keyHint('mod+shift+r'), run: () => cs.restart() },
+          { id: 'settings', group: 'Game', label: 'Reading settings', hint: keyHint('mod+,'), run: () => cs.openSettings() },
+          { id: 'focus', group: 'View', label: focus ? 'Leave focus mode' : 'Focus mode', hint: keyHint('mod+shift+f'), run: () => setFocus((on) => !on) },
+          { id: 'sidebar', group: 'View', label: sidebar ? 'Hide sidebar' : 'Show sidebar', hint: keyHint('mod+\\'), run: () => setSidebar((on) => !on) },
+          { id: 'panel', group: 'View', label: docked ? 'Hide achievements panel' : 'Show achievements panel', hint: keyHint('mod+i'), run: () => (wide ? setInspector((on) => !on) : cs.openAchievements()) },
+          { id: 'library', group: 'Go', label: 'Back to the library', hint: keyHint('mod+shift+l'), run: onExit },
+        ]
+      : [{ id: 'app-settings', group: 'App', label: 'Settings', hint: keyHint('mod+,'), run: () => setAppSettings(true) }]),
+  ];
+
   useMenu({
+    palette: () => setPalette((on) => !on),
     'toggle-sidebar': () => setSidebar((on) => !on),
     'toggle-panel': () =>
       game && cs ? (wide ? setInspector((on) => !on) : cs.openAchievements()) : undefined,
@@ -344,6 +378,18 @@ export function Shell({
           </h1>
 
           <div className="flex items-center gap-0.5" data-tauri-drag-region="false">
+            {/* The palette is the discoverable route to everything else, so it
+                is the one control that is always here. */}
+            <button
+              className="app-btn"
+              onClick={() => setPalette(true)}
+              aria-label="Command palette"
+              title={`Command palette (${keyHint('mod+k')})`}
+            >
+              <CommandIcon className="size-3.5" aria-hidden />
+              <kbd className="app-kbd">{keyHint('mod+k')}</kbd>
+            </button>
+
             {game && cs ? (
               <>
                 <button
@@ -402,6 +448,7 @@ export function Shell({
         </button>
       )}
 
+      <Palette open={palette} onOpenChange={setPalette} commands={commands} />
       {appSettings && <AppSettings onClose={() => setAppSettings(false)} />}
     </div>
   );

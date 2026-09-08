@@ -5,6 +5,92 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 10b — v0.1.11, the direction your answers implied
+
+"Sharp tool, Linear/Raycast-like" and "avoid Kindle beige" together are a bigger
+change than they sound, because the chrome derives from the reading theme — and
+the default reading theme was **paperback**, warm stock. The app's first
+impression *was* the thing you said to avoid.
+
+### PRODUCT.md
+
+Written, with the register (product), users, personality and anti-references
+from your two answers, and accessibility from the README. It records the tension
+your answers create rather than smoothing it over: the reading surface is calm
+and paper-like because prose demands it, the chrome is a machined instrument,
+and the seam between them is the most important line in the design.
+
+Two open questions are parked at the bottom of it, both from "dense, precise":
+whether the shelf should default to a list rather than a poster grid, and
+whether the palette should switch games given that switching restarts the
+process.
+
+### Sharp is geometry and density, not hue
+
+The colour still belongs to whichever theme the reader picks — that was your
+earlier instruction and it stands. So the direction lands in form:
+
+- **Default theme is now nocturne.** Deep navy, low glare. Paperback is one
+  click away for readers who want paper; the app just no longer opens wearing it.
+- **Chrome corners capped at 3px**, independent of the reading surface. The
+  softer themes run `--cs-radius` to 8px, which reads as upholstery in a
+  toolbar.
+- **Density**: control height 26px, macOS titlebar down from 52 to 48.
+- **Every number in the chrome is tabular** — counts, scores, times, line
+  numbers. Proportional digits make a column of counts wobble, which is exactly
+  the imprecision this direction removes.
+- **Selection is solid accent**, not a wash. A tool shows state; it does not
+  suggest it.
+- `.app-btn` gained the states it was missing: `:active` and `:disabled`.
+
+### The command palette — ⌘K
+
+The one feature that makes an app feel like Linear rather than just look like
+it. Everything available right now, searchable, grouped, with its shortcut
+printed on the row.
+
+It runs the **same handler registry** the menu bar and the titlebar buttons use,
+so a command cannot work in one place and not another. Radix underneath, so the
+focus trap, Escape, scroll lock and `aria-modal` come along rather than being
+reimplemented badly. Only the list behaviour is ours: arrows move a selection
+independent of the pointer, hover syncs to it so pointer and keyboard never
+disagree about what Enter would run, and the filter is plain substring matching
+— fuzzy sounds clever and makes the ordering unpredictable.
+
+Shortcut hints render in platform notation (`⌘⇧F` on macOS, `Ctrl+Shift+F`
+elsewhere) from one `keyHint()` helper, and the titlebar shows `⌘K` on the
+palette button, because a keyboard-first app that hides its bindings in a menu
+nobody opens is a mouse app with accelerators.
+
+### A real bug fell out of this
+
+`src/lib/theme.ts` listed six themes: parchment, nocturne, terminal, **slate,
+sepia, high-contrast**. The engine has paperback, terminal, nocturne,
+manuscript, newsprint, ember. Three of my ids did not exist and a fourth was
+misnamed — so picking Slate, Sepia or High contrast from the library page set a
+class nothing styled, and the theme silently did not change. The list is now
+copied from `engine/core/settings.js:13` with the engine's own hints, which the
+settings chips now show. There is a harness assertion that the applied theme is
+one the engine actually has.
+
+### Verified
+
+- `npm run test:webview` — **73 passed, 0 failed** (nine new: the palette has a
+  visible control, opens as a labelled dialog, lists the available commands,
+  pre-selects the first row, filters, and says so when nothing matches; plus
+  chrome geometry is its own and the applied theme is a real one)
+- `npm run test:game` — **68 passed, 0 failed** on Choice of Magics
+- impeccable detector — **0 findings**
+- build, typecheck, theme-scope, register, stale, version — all pass
+
+### Still open
+
+The two questions in PRODUCT.md. And `/impeccable critique` now has real project
+context to read, so a proper heuristic review of the reading surface itself —
+which this session did not touch — is the natural next pass.
+
+---
+
 ## 2026-09-08 · Session 10 — v0.1.10, the design audit, with both skills loaded
 
 Both skills loaded this time. `impeccable`'s setup script blocked immediately —

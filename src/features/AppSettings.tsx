@@ -23,7 +23,7 @@ function Chips({
   onPick,
 }: {
   legend: string;
-  items: { id: string; label: string }[];
+  items: { id: string; label: string; hint?: string }[];
   current: string;
   onPick: (id: string) => void;
 }) {
@@ -46,6 +46,7 @@ function Chips({
             )}
           >
             {item.label}
+            {item.hint && <span className="app-chip-hint">{item.hint}</span>}
           </button>
         ))}
       </div>
@@ -68,7 +69,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
     <DialogPanel open title="Settings" onOpenChange={(v) => !v && onClose()}>
       <Chips
         legend="Theme"
-        items={THEMES.map((t) => ({ id: t.id, label: t.label }))}
+        items={THEMES.map((t) => ({ id: t.id, label: t.label, hint: t.hint }))}
         current={theme}
         onPick={(id) => {
           setTheme(id);
