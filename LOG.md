@@ -5,6 +5,156 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 9 — v0.1.9, from your screenshot and eleven notes
+
+Pulled `daf32a7`. Your custom icon is untouched — I only removed three files the
+last unzip left behind (`Sidebar.tsx`, `StatsPanel.tsx`, `appearance.ts`) and
+added them to `check-stale.mjs` so the next unzip says so itself.
+
+### The screenshot was one line of CSS
+
+`.app-shell` is a three-column grid — sidebar, story, panel. With no game open
+only `.app-main` exists, and grid put it in **column 1**, which is `auto` and
+therefore sized to its content. That is the whole reason the titlebar stopped
+at 930px with bare background to the right of it. Each pane now names its
+column explicitly, so the width is right at every combination of panes.
+
+### Fonts
+
+Also one line, and the same kind of mistake. `.app-shell` carried
+`font-family: var(--app-font-ui)` — and `.app-shell` wraps the reading pane, so
+the platform's UI face cascaded straight over the engine's serif for the prose
+itself. The stack now sits on the chrome surfaces only, and `.app-reading` asks
+for `--cs-font-body` explicitly.
+
+There was a second half to it: `applyTheme()` set a font-size on `<body>` and
+never applied the typeface class at all. The engine does neither of those
+things — the face is a `font-<id>` class on body (settings.js:80) with legacy
+`sans`/`dyslexia` aliases some games check, and zoom is a percentage font-size
+on `<html>` (settings.js:105). Setting body's font-size overrode the theme's own
+body rule. It now uses exactly the engine's two mechanisms, and mirrors the
+typeface back out of engine state alongside theme and zoom.
+
+### The stats screen: found it
+
+Not a routing problem after all, and worse than one.
+
+`Pending.tsx` named its radios `group0` and its ids `opt-0-0`. Nothing in either
+name said which channel it belonged to — and the story's choice is still mounted
+in the reading pane behind the stats dialog, with those same ids. A
+`<label htmlFor="opt-0-0">` resolves to the **first** match in the document. So
+clicking an option on Sordwin's stats screen checked the *story's* first radio,
+behind the dialog, exactly as you described. The shared radio `name` made the
+two groups fight over selection on top of that.
+
+Ids and names now carry the channel (`stats-opt-0-0`), and the digit shortcuts
+only answer the topmost surface — one keypress used to select in both. Every
+game with a `*choice` in its stats screen had this; Sordwin is just where it was
+visible.
+
+The fixture game's stats screen now has a `*choice` in it, so the harness holds
+the line: five new assertions check the ids are scoped, the labels point into
+the dialog, and answering the sheet leaves the story's selection alone.
+
+### Why the window would not close
+
+`onCloseRequested` cancelled the close, flushed the saves, then called
+`destroy()` — and `core:window:allow-destroy` was **not in the capability set**,
+so that call was rejected and nothing closed the window it had just stopped from
+closing. Alt+F4 went the same way, for the same reason.
+
+The permission is granted, and the handler now falls back: destroy, then close,
+then a reload as a last resort. Cancelling a close and then failing to act on it
+is the one outcome that traps someone in the app, so it cannot depend on a
+single call succeeding.
+
+### The panes
+
+Both edges resize now — the achievements panel has the same grip as the sidebar,
+220–520px, remembered separately. The grips themselves were a 6px invisible
+strip; they are 9px of hit area with a 2px line that appears on hover, so the
+target is comfortable while the seam stays thin. Same treatment for the
+horizontal divider, which also grew a slide transition that is switched off
+while dragging so the pane cannot lag behind the pointer.
+
+Both sidebar panes scroll now. `.app-sidebar` was missing `min-height: 0` and
+`overflow: hidden`, so the pane stack sized itself to its content and the
+bodies never got a scrollbar. That is the fourth time this project has hit that
+default; every scroller has both properties now.
+
+**This game** was six labelled rows of small grey text, which is exactly as
+uninformative as it sounds — nothing stood out, and the numbers a reader
+actually glances at were the least visible thing in the panel. They are tiles
+now: number first at size, label under it, reflowing from one column to two with
+the sidebar's width, and the cover is a proper 3:4 poster rather than a
+160px-capped image.
+
+### The library, third attempt
+
+The text ran together — "Sordwin: The Evertree SagaThom Baylay11 scenes" —
+because the title and meta lines are `<span>`s inside the card's `<button>` and
+I never gave them `display: block`. Fixed, with the spacing and weight
+hierarchy that was hiding behind it.
+
+Added the **recently played** rail on the left: the shelf grows but the handful
+of games actually being read does not, and a grid gets slower to scan with every
+archive. It lists the eight most recent with art and when they were last opened,
+and disappears below 780px, where there is not room for both it and a readable
+shelf. Opening a game stamps `lastPlayedAt` on its manifest.
+
+Each card also gained an export action beside delete, both in a corner group
+that appears on hover and never sits under the click that starts a game.
+
+### Exporting a game with its data
+
+New `.cszip` layout, and imports of ordinary published archives are unaffected:
+
+```
+scenes/*.txt                        the game as it ships
+<assets>                            its images
+choicescript-player/manifest.json   title, author, scene list, achievements
+choicescript-player/store.json      saves, achievements, per-game settings
+```
+
+Another player ignores the folder and sees a plain game; this one reads it back.
+The store is restored under the **new** import's id, so importing the same
+export twice gives two independent copies rather than two games writing into one
+save file.
+
+It writes to the downloads folder and reports the path, rather than opening a
+file dialog — that would mean another plugin and another permission for one
+button.
+
+### Focus mode, and the portable zip
+
+Focus mode already hid the titlebar and menu bar as of 0.1.8; nothing new there
+this session beyond the grip work. The README is no longer copied into the
+portable zip.
+
+### On /impeccable and /ui-ux-pro-max
+
+I did not load either skill this session — the context was largely spent on the
+five engine-level bugs above, and reading a design database I would then only
+half-use seemed worse than doing the work directly. The design decisions here
+are all argued in the code comments and above. Say the word and I will start the
+next session with both skills loaded and go through the interface properly with
+them.
+
+### Verified
+
+- `npm run build` — clean, 439 kB · CSS 47 kB
+- `typecheck`, `check-stale`, `test:version`, `test:theme`, `test:register` — pass
+- `npm run test:webview` — **58 passed, 0 failed**
+- `npm run test:game` — **53 passed, 0 failed** on Choice of Magics (five
+  stats-choice assertions skip: its stats screen has no `*choice`, and an
+  assertion about a feature a game does not use must not fail that game)
+
+`export_game`, the archive changes and the capability additions are uncompiled
+here as always. If `export_game` fails to build it is one function and nothing
+else depends on it.
+
+---
+
 ## 2026-09-08 · Session 8 — v0.1.8, five items
 
 ### The icon is back

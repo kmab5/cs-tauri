@@ -17,6 +17,8 @@ export interface StoredGame {
   achievements: [string, boolean, number, string, string, string][];
   source: string;
   uploadedAt: string;
+  /** Set each time the game is opened, for the recently-played rail. */
+  lastPlayedAt?: string;
   bytes: number;
 }
 

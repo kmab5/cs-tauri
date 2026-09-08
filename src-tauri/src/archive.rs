@@ -44,6 +44,13 @@ const ASSET_EXT: &[&str] = &[
     ".wav", ".m4a", ".woff", ".woff2", ".ttf", ".otf",
 ];
 
+/// Where a .cszip keeps the reader's own data.
+///
+/// A plain published archive has none of this and imports exactly as before. An
+/// archive exported by this app carries its manifest and its save store here,
+/// so a game and everything the reader did in it travel together.
+pub const PLAYER_DIR: &str = "choicescript-player/";
+
 #[derive(Debug, Default, serde::Serialize)]
 pub struct Extracted {
     /// Scene names without the extension, as the engine refers to them.
@@ -55,6 +62,10 @@ pub struct Extracted {
     /// Raw startup.txt. The front end parses it.
     pub startup: String,
     pub bytes: u64,
+    /// The exported manifest, if this archive came from this app.
+    pub manifest: Option<String>,
+    /// The exported save store: saves, achievements, per-game settings.
+    pub store: Option<String>,
 }
 
 struct Entry {
@@ -237,6 +248,18 @@ pub fn extract(bytes: &[u8], dest: &Path) -> Result<Extracted, String> {
         let Some(rel) = safe_relative(&entry.path) else {
             continue;
         };
+
+        /* The player's own data, if this archive was exported by this app.
+           Read before the scene-root filter, since it sits outside the game. */
+        if let Some(name) = rel.strip_prefix(PLAYER_DIR) {
+            match name {
+                "manifest.json" => out.manifest = Some(String::from_utf8_lossy(&entry.data).into()),
+                "store.json" => out.store = Some(String::from_utf8_lossy(&entry.data).into()),
+                _ => {}
+            }
+            continue;
+        }
+
         let base = base_of(&rel).to_string();
         let ext = ext_of(&base);
 

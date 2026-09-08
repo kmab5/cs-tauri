@@ -27,6 +27,15 @@ export const THEMES: ThemeChoice[] = [
 
 const THEME_KEY = 'cs-app-theme';
 const ZOOM_KEY = 'cs-app-zoom';
+const FACE_KEY = 'cs-app-face';
+
+export function getFace(): string {
+  return localStorage.getItem(FACE_KEY) || 'serif';
+}
+
+export function setFace(id: string) {
+  localStorage.setItem(FACE_KEY, id);
+}
 
 export function getTheme(): string {
   return localStorage.getItem(THEME_KEY) || THEMES[0].id;
@@ -52,13 +61,30 @@ export function setZoom(value: number) {
  * font-size multiplier, so matching that exactly means the two cannot disagree
  * about what "nocturne" looks like.
  */
+/**
+ * Applies the stored choice to the document, by exactly the mechanisms the
+ * engine uses.
+ *
+ * That matters more than it sounds. The typeface is a `font-<id>` class on
+ * <body> (settings.js:80) with legacy `sans`/`dyslexia` aliases some games
+ * check, and the zoom is a percentage font-size on <html> (settings.js:105) —
+ * *not* a font-size on body, which is what an earlier version of this function
+ * set. Setting body's font-size directly overrode the theme's own body rule and
+ * took the reading face down with it, which is why the prose came out in the
+ * platform's UI font.
+ */
 export function applyTheme() {
-  const id = getTheme();
   const body = document.body;
+
   for (const cls of [...body.classList]) {
-    if (cls.startsWith('theme-')) body.classList.remove(cls);
+    if (cls.startsWith('theme-') || cls.startsWith('font-')) body.classList.remove(cls);
   }
-  body.classList.add(`theme-${id}`);
-  body.style.setProperty('--cs-zoom', String(getZoom()));
-  body.style.fontSize = `calc(var(--cs-size-body, 1.125rem) * ${getZoom()})`;
+  body.classList.remove('sans', 'dyslexia');
+  body.classList.add(`theme-${getTheme()}`);
+
+  const face = getFace();
+  if (face && face !== 'serif') body.classList.add(`font-${face}`);
+  if (face === 'sans' || face === 'dyslexia') body.classList.add(face);
+
+  document.documentElement.style.fontSize = `${getZoom() * 100}%`;
 }

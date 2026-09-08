@@ -11,10 +11,10 @@
  * place in a ten-hour story. The way back to the shelf is explicit instead.
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ChevronDown, ChevronLeft, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronUp, Share2 } from 'lucide-react';
 
 import type { ChoiceScriptApi, SaveRecord } from '@/lib/choicescript';
-import { loadIcon, type StoredGame } from '@/lib/library';
+import { exportGame, loadIcon, type StoredGame } from '@/lib/library';
 
 const SPLIT_KEY = 'cs-sidebar-split';
 type Collapsed = 'none' | 'top' | 'bottom';
@@ -131,7 +131,7 @@ export function GamePanel({
         </button>
       </div>
 
-      <div className="app-panes" ref={panes}>
+      <div className="app-panes" ref={panes} data-dragging={dragging}>
         <Pane
           title="This game"
           collapsed={collapsed === 'top'}
@@ -142,7 +142,8 @@ export function GamePanel({
           {cover && <img className="app-detail-cover" src={cover} alt="" />}
           <h3 className="app-detail-title">{game.title}</h3>
           <p className="app-detail-by">{game.author || 'Unknown author'}</p>
-          {cs ? <Progress cs={cs} game={game} /> : null}
+          {cs ? <Facts cs={cs} game={game} /> : null}
+          <Export game={game} />
         </Pane>
 
         {collapsed === 'none' && (
@@ -175,8 +176,15 @@ export function GamePanel({
   );
 }
 
-/** Split out so the panel can render before the engine has loaded. */
-function Progress({ cs, game }: { cs: ChoiceScriptApi; game: StoredGame }) {
+/**
+ * The facts, as tiles.
+ *
+ * Six labelled rows of small grey text all read at the same weight, so nothing
+ * stood out and the numbers — the part a reader actually glances at — were the
+ * least visible thing in the panel. Number first, at size, label under it.
+ * Split out from the panel so the panel can render before the engine loads.
+ */
+function Facts({ cs, game }: { cs: ChoiceScriptApi; game: StoredGame }) {
   const state = useSyncExternalStore(cs.subscribe, cs.getState, cs.getState);
   const total = state.achievements?.total ?? game.achievements.length;
   const earned = state.achievements?.earned.length ?? 0;
@@ -184,30 +192,61 @@ function Progress({ cs, game }: { cs: ChoiceScriptApi; game: StoredGame }) {
   const totalScore = state.achievements?.totalScore ?? 0;
 
   return (
-    <dl>
-      <dt>Screens read</dt>
-      <dd>{state.history}</dd>
-      <dt>Scenes</dt>
-      <dd>{game.sceneList.length || game.scenes.length}</dd>
+    <div className="app-facts">
+      <span className="app-fact">
+        <b>{state.history}</b>
+        <span>Screens</span>
+      </span>
+      <span className="app-fact">
+        <b>{game.sceneList.length || game.scenes.length}</b>
+        <span>Scenes</span>
+      </span>
       {total > 0 && (
-        <>
-          <dt>Achievements</dt>
-          <dd>
-            {earned} / {total}
-          </dd>
-        </>
+        <span className="app-fact">
+          <b>
+            {earned}
+            <small>/{total}</small>
+          </b>
+          <span>Awards</span>
+        </span>
       )}
       {totalScore > 0 && (
-        <>
-          <dt>Points</dt>
-          <dd>
-            {score} / {totalScore}
-          </dd>
-        </>
+        <span className="app-fact">
+          <b>
+            {score}
+            <small>/{totalScore}</small>
+          </b>
+          <span>Points</span>
+        </span>
       )}
-      <dt>Added</dt>
-      <dd>{new Date(game.uploadedAt).toLocaleDateString()}</dd>
-    </dl>
+      <span className="app-fact app-fact-wide">
+        <b>{new Date(game.uploadedAt).toLocaleDateString()}</b>
+        <span>Added to library</span>
+      </span>
+    </div>
+  );
+}
+
+/** Exports the game together with this reader's saves and achievements. */
+function Export({ game }: { game: StoredGame }) {
+  const [where, setWhere] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="mt-3">
+      <button
+        className="app-btn w-full"
+        onClick={() => {
+          setError(null);
+          exportGame(game.id).then(setWhere, (e: Error) => setError(e.message));
+        }}
+      >
+        <Share2 className="size-3.5" aria-hidden />
+        <span className="app-btn-label">Export with saves</span>
+      </button>
+      {where && <p className="app-note mt-1">Written to {where}</p>}
+      {error && <p className="app-note mt-1">{error}</p>}
+    </div>
   );
 }
 

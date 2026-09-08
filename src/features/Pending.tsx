@@ -5,7 +5,7 @@
  * (`cs.chooseGroups`, `cs.next`, `cs.submitInput`) rather than calling a
  * callback handed to us in state. That is what keeps state serialisable.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ChoiceOption, ChoiceScriptApi, Channel, Pending } from '@/lib/choicescript';
 import { Button } from '@/components/ui/button';
@@ -20,10 +20,14 @@ import { cn } from '@/lib/utils';
 function Choice({
   pending,
   onAnswer,
+  scope,
 }: {
   pending: Extract<Pending, { kind: 'choice' }>;
   onAnswer: (path: number[]) => void;
+  /** 'story' or 'stats': both can be on screen at once. */
+  scope: string;
 }) {
+  const form = useRef<HTMLFormElement>(null);
   const spring = { type: 'spring', stiffness: 500, damping: 32 } as const;
   const groups = pending.groups.length ? pending.groups : [''];
   const [selected, setSelected] = useState<Record<number, number | null>>({});
@@ -49,6 +53,15 @@ function Choice({
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const tag = (e.target as HTMLElement | null)?.tagName ?? '';
       if (/^(INPUT|TEXTAREA)$/.test(tag)) return;
+      /*
+       * Two choices can be on screen at once — the story's, and a stats
+       * screen's in a dialog over it. Only the topmost surface may answer a
+       * keypress, or one digit selects in both.
+       */
+      const dialog = document.querySelector('[role=dialog]');
+      const mine = form.current;
+      if (dialog && mine && !dialog.contains(mine)) return;
+      if (!dialog && mine?.closest('[role=dialog]')) return;
       const n = parseInt(e.key, 10);
       const opts = optionsFor(groups.length - 1);
       if (!opts || Number.isNaN(n) || n < 1 || n > opts.length) return;
@@ -78,7 +91,7 @@ function Choice({
   const ready = groups.every((_, i) => selected[i] !== null && selected[i] !== undefined);
 
   return (
-    <form className="mt-10" onSubmit={submit}>
+    <form className="mt-10" onSubmit={submit} ref={form}>
       {groups.map((group, depth) => {
         const opts = optionsFor(depth);
         if (!opts) return null;
@@ -91,14 +104,23 @@ function Choice({
             )}
             <div className="flex flex-col gap-2">
               {opts.map((option, i) => {
-                const id = `opt-${depth}-${i}`;
+                /*
+                 * Ids and radio names carry the channel. Without it the stats
+                 * screen's options reused the story's ids, so a <label htmlFor>
+                 * in the dialog resolved to the *first* match in the document —
+                 * the story's radio, behind it — and answering the stats screen
+                 * silently selected a story option instead. Sordwin's stats
+                 * screen made that visible; every game with a *choice in its
+                 * stats screen had it.
+                 */
+                const id = `${scope}-opt-${depth}-${i}`;
                 const checked = selected[depth] === i;
                 return (
                   <div key={i} className="relative">
                     <input
                       type="radio"
                       id={id}
-                      name={`group${depth}`}
+                      name={`${scope}-group${depth}`}
                       className="peer sr-only"
                       disabled={option.unselectable}
                       checked={checked}
@@ -250,7 +272,13 @@ export function PendingView({
     );
   }
   if (pending.kind === 'choice') {
-    return <Choice pending={pending} onAnswer={(path) => cs.chooseGroups(path, channel)} />;
+    return (
+      <Choice
+        pending={pending}
+        scope={channel ?? 'story'}
+        onAnswer={(path) => cs.chooseGroups(path, channel)}
+      />
+    );
   }
   if (pending.kind === 'input') {
     return <TextInput pending={pending} onAnswer={(v) => cs.submitInput(v, channel)} />;

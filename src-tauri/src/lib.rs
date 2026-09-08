@@ -90,6 +90,7 @@ pub fn run() {
             library::read_scenes,
             library::asset_root,
             library::delete_game,
+            library::export_game,
             library::library_bytes,
             library::decompress,
             library::take_bundled,

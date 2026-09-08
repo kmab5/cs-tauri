@@ -133,6 +133,22 @@ export async function pendingArchives(): Promise<string[]> {
 export const listGames = db.listGames;
 export const deleteGame = db.deleteGame;
 export const libraryBytes = db.libraryBytes;
+export const exportGame = db.exportGame;
+
+/**
+ * Stamp a game as just opened.
+ *
+ * Fire-and-forget: the reader is already looking at the first screen by the
+ * time this lands, and a failed write should not interrupt that — the rail
+ * simply keeps the older order.
+ */
+export async function touchGame(game: StoredGame): Promise<void> {
+  try {
+    await db.commit({ ...game, lastPlayedAt: new Date().toISOString() });
+  } catch {
+    /* the game still opened; only the ordering of the rail is affected */
+  }
+}
 
 /* ------------------------------------------------------------------ assets */
 

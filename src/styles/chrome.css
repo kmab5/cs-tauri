@@ -34,6 +34,7 @@ body {
   /* Set by the sidebar's resize handle and remembered across launches. */
   --app-sidebar-w: 260px;
   --app-inspector-w: 320px;
+  --app-rail-w: 220px;
 
   --app-font-ui: system-ui, sans-serif;
 }
@@ -92,8 +93,28 @@ body {
   min-height: 0;
   overflow: hidden;
   background: var(--app-chrome-elev);
-  font-family: var(--app-font-ui);
   color: var(--app-label);
+}
+
+/*
+ * Explicit columns. With only .app-main present — the library, with no game
+ * open — grid put it in column 1, which is `auto` and therefore sized to its
+ * content: the titlebar and the shelf stopped mid-window and the rest was bare
+ * background. Placing each pane in its own column fixes the width at every
+ * combination of panes.
+ *
+ * The font stack goes on the chrome surfaces rather than here. On .app-shell it
+ * cascaded into the reading pane and overrode the engine's serif for the prose
+ * itself, which is what "fonts aren't working" was.
+ */
+.app-sidebar {
+  grid-column: 1;
+}
+.app-main {
+  grid-column: 2;
+}
+.app-inspector {
+  grid-column: 3;
 }
 
 /*
@@ -112,8 +133,10 @@ body {
 
 /* The reading column. Opaque, always: prose over a blurred desktop is
    unreadable, and the brief is that the page recedes, not that it dissolves. */
+/* The author's face, not the platform's. */
 .app-reading {
   flex: 1;
+  font-family: var(--cs-font-body, Georgia, serif);
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -137,6 +160,7 @@ body {
 
 .app-titlebar {
   display: flex;
+  font-family: var(--app-font-ui);
   height: var(--app-titlebar-h);
   flex-shrink: 0;
   align-items: center;
@@ -233,6 +257,10 @@ body {
   display: flex;
   width: var(--app-sidebar-w);
   min-width: 0;
+  /* Both needed for the panes inside to scroll rather than overflow. */
+  min-height: 0;
+  overflow: hidden;
+  font-family: var(--app-font-ui);
   flex-direction: column;
   border-right: 1px solid var(--app-border);
   background: var(--app-chrome);
@@ -335,9 +363,12 @@ body {
 /* --------------------------------------------------------------- inspector */
 
 .app-inspector {
+  position: relative;
   display: flex;
   width: var(--app-inspector-w);
+  min-width: 0;
   min-height: 0;
+  font-family: var(--app-font-ui);
   flex-direction: column;
   border-left: 1px solid var(--app-border);
   background: var(--app-chrome);
@@ -487,23 +518,48 @@ body {
  * The sidebar's width is the player's, not ours. Dragged here, remembered in
  * localStorage, clamped so it can neither disappear nor eat the reading column.
  */
-.app-resizer {
+/*
+ * Grips. Six pixels of hit area with a two-pixel line drawn inside it, so the
+ * target is comfortable while the seam stays thin — and the line only appears
+ * on hover, because a window full of visible dividers reads as scaffolding.
+ */
+.app-resizer,
+.app-resizer-right {
   position: absolute;
   top: 0;
-  right: -3px;
   bottom: 0;
   z-index: 5;
-  width: 6px;
+  display: grid;
+  width: 9px;
+  place-items: center;
   border: 0;
   background: transparent;
   padding: 0;
   cursor: col-resize;
 }
-.app-resizer:hover,
-.app-resizer[data-dragging='true'] {
-  background: var(--app-accent-wash);
+.app-resizer {
+  right: -4px;
 }
-.app-resizer:focus-visible {
+.app-resizer-right {
+  left: -4px;
+}
+.app-resizer::after,
+.app-resizer-right::after {
+  content: '';
+  width: 2px;
+  height: 28px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+.app-resizer:hover::after,
+.app-resizer-right:hover::after,
+.app-resizer[data-dragging='true']::after,
+.app-resizer-right[data-dragging='true']::after {
+  background: var(--app-accent);
+}
+.app-resizer:focus-visible,
+.app-resizer-right:focus-visible {
   outline: 2px solid var(--app-accent);
   outline-offset: -2px;
 }
@@ -517,8 +573,11 @@ body {
   min-height: 0;
 }
 .app-detail-cover {
+  display: block;
   width: 100%;
-  max-width: 160px;
+  max-width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
   border-radius: var(--app-radius);
   background: var(--app-chrome-sunken);
 }
@@ -535,19 +594,46 @@ body {
   font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
-.app-pane-body dl {
+/*
+ * Facts as tiles, not a list. Six labelled rows of small grey text all read at
+ * the same weight, so nothing stood out and the numbers — the part a reader
+ * actually glances at — were the least visible thing in the panel. Tiles put
+ * the number first, at size, and reflow from one column to two with the
+ * sidebar's width.
+ */
+.app-facts {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.25rem 0.75rem;
-  margin: 1rem 0 0;
-  font-size: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
+  gap: 0.375rem;
+  margin: 0.875rem 0 0;
 }
-.app-pane-body dt {
+.app-fact {
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  background: var(--app-chrome-elev);
+  padding: 0.375rem 0.5rem;
+}
+.app-fact b small {
   color: var(--app-label-dim);
+  font-size: 0.6875rem;
+  font-weight: 500;
 }
-.app-pane-body dd {
-  margin: 0;
+.app-fact b {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.app-fact span {
+  display: block;
+  color: var(--app-label-dim);
+  font-size: 0.625rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.app-fact-wide {
+  grid-column: 1 / -1;
 }
 
 /* ----------------------------------------------------------- library page */
@@ -559,6 +645,9 @@ body {
  * from a phone-width window to a wide one instead of at chosen breakpoints.
  */
 .lib {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   margin: 0 auto;
   max-width: min(84rem, 100%);
   padding: clamp(1.25rem, 4vw, 2.75rem) clamp(1rem, 4vw, 2.5rem) 4rem;
@@ -659,6 +748,9 @@ body {
   padding: 0.625rem 0.75rem 0.75rem;
 }
 .lib-card-title {
+  /* These are spans inside a button — without display they run together, which
+     is why the shelf read "Sordwin: The Evertree SagaThom Baylay11 scenes". */
+  display: block;
   margin: 0;
   font-size: 0.875rem;
   font-weight: 600;
@@ -666,26 +758,32 @@ body {
   overflow-wrap: anywhere;
 }
 .lib-card-meta {
-  margin: 0.25rem 0 0;
+  display: block;
+  margin: 0.1875rem 0 0;
   color: var(--app-label-dim);
   font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
 
-/* Destructive, so it stays out of the way until the pointer is on the card and
-   never sits under the click that starts a game. */
-.lib-del {
+/* Secondary actions. They stay out of the way until the pointer is on the card,
+   and never sit under the click that starts a game. */
+.lib-actions {
   position: absolute;
   top: 0.375rem;
   right: 0.375rem;
-  border-radius: var(--app-radius);
-  background: color-mix(in srgb, var(--app-chrome) 85%, transparent);
+  display: flex;
+  gap: 0.125rem;
   opacity: 0;
   transition: opacity 120ms ease;
 }
-.lib-card:hover .lib-del,
-.lib-del:focus-visible,
-.lib-del[data-armed='true'] {
+.lib-act {
+  border-radius: var(--app-radius);
+  background: color-mix(in srgb, var(--app-chrome-elev) 92%, transparent);
+  box-shadow: 0 0 0 1px var(--app-border);
+}
+.lib-card:hover .lib-actions,
+.lib-actions:focus-within,
+.lib-act[data-armed='true'] {
   opacity: 1;
 }
 
@@ -721,7 +819,7 @@ body {
     border-bottom: 0;
     font-size: 1.25rem;
   }
-  .lib-del {
+  .lib-actions {
     opacity: 1;
   }
 }
@@ -774,16 +872,33 @@ body {
 }
 
 .app-vsplit {
-  height: 7px;
+  display: grid;
+  height: 9px;
   flex-shrink: 0;
+  place-items: center;
   border: 0;
   background: transparent;
   padding: 0;
   cursor: row-resize;
 }
-.app-vsplit:hover,
-.app-vsplit[data-dragging='true'] {
-  background: var(--app-accent-wash);
+.app-vsplit::after {
+  content: '';
+  width: 28px;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+.app-vsplit:hover::after,
+.app-vsplit[data-dragging='true']::after {
+  background: var(--app-accent);
+}
+/* No transition while dragging: the pane would lag a frame behind the pointer. */
+.app-pane {
+  transition: flex-grow 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.app-panes[data-dragging='true'] .app-pane {
+  transition: none;
 }
 .app-vsplit:focus-visible {
   outline: 2px solid var(--app-accent);
@@ -917,5 +1032,111 @@ body {
 @media (max-height: 480px) {
   .app-measure {
     padding-bottom: 3rem;
+  }
+}
+
+/* --------------------------------------------------- library recent rail */
+
+/*
+ * The shelf grows; the handful of games actually being read does not. A rail of
+ * what was last opened is a shortcut past a grid that gets slower to scan with
+ * every archive added.
+ */
+.lib-shell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.lib-rail {
+  position: relative;
+  display: flex;
+  width: var(--app-rail-w, 220px);
+  min-width: 0;
+  flex-direction: column;
+  border-right: 1px solid var(--app-border);
+  background: var(--app-chrome);
+  font-family: var(--app-font-ui);
+}
+.lib-rail-head {
+  display: flex;
+  height: 26px;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 0 0.625rem;
+  color: var(--app-label-dim);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lib-rail-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.5rem 0.75rem;
+}
+.lib-recent {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: var(--app-radius);
+  background: transparent;
+  padding: 0.375rem 0.5rem;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.lib-recent:hover {
+  background: var(--app-chrome-sunken);
+}
+.lib-recent:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: -2px;
+}
+.lib-recent img,
+.lib-recent span.lib-recent-art {
+  display: grid;
+  height: 40px;
+  width: 30px;
+  flex-shrink: 0;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--app-chrome-sunken);
+  object-fit: cover;
+  color: var(--app-label-dim);
+  font-size: 0.75rem;
+}
+.lib-recent-text {
+  min-width: 0;
+  flex: 1;
+}
+.lib-recent-name {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.lib-recent-when {
+  display: block;
+  color: var(--app-label-dim);
+  font-size: 0.6875rem;
+}
+
+/* The rail is a shortcut, not a requirement: below this there is not room for
+   both it and a readable shelf, so the shelf wins. */
+@media (max-width: 780px) {
+  .lib-rail {
+    display: none;
+  }
+  .lib-shell {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

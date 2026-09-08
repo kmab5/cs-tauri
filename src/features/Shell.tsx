@@ -24,11 +24,12 @@ import { AchievementsPanel } from './AchievementsPanel';
 import { AppSettings } from './AppSettings';
 import { readScroll, saveScroll, useReadingKeys } from './useReadingKeys';
 import { useAutosave } from './useAutosave';
-import { setTheme, setZoom } from '@/lib/theme';
+import { setFace, setTheme, setZoom } from '@/lib/theme';
 
 /** Below this the side panel would squeeze the reading measure, so it is hidden. */
 const WIDE = '(min-width: 1100px)';
 const SIDEBAR = { min: 180, max: 460, key: 'cs-sidebar-w' };
+const INSPECTOR = { min: 220, max: 520, key: 'cs-inspector-w' };
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(
@@ -71,7 +72,8 @@ function ReadingKeys({ cs, gameId }: { cs: ChoiceScriptApi; gameId: string }) {
   useEffect(() => {
     setTheme(state.theme.name);
     setZoom(state.theme.zoom);
-  }, [state.theme.name, state.theme.zoom]);
+    setFace(state.theme.typeface);
+  }, [state.theme.name, state.theme.zoom, state.theme.typeface]);
 
   /* Restored once, at the start of the session. Player scrolls each new screen
      back to the top, so anything later would be fighting it. */
@@ -165,8 +167,22 @@ function GameControls({
   );
 }
 
-/** The drag handle on the sidebar's trailing edge. */
-function Resizer({ onWidth }: { onWidth: (px: number) => void }) {
+/**
+ * A vertical grip, for either edge.
+ *
+ * `edge` decides which side it sits on and which direction widens the pane, so
+ * the right-hand panel gets the same affordance as the left instead of being
+ * fixed at 320px.
+ */
+function Resizer({
+  edge,
+  label,
+  onWidth,
+}: {
+  edge: 'left' | 'right';
+  label: string;
+  onWidth: (px: number) => void;
+}) {
   const [dragging, setDragging] = useState(false);
 
   const start = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -184,16 +200,16 @@ function Resizer({ onWidth }: { onWidth: (px: number) => void }) {
 
   return (
     <button
-      className="app-resizer"
+      className={edge === 'left' ? 'app-resizer' : 'app-resizer-right'}
       data-dragging={dragging}
       data-tauri-drag-region="false"
-      aria-label="Resize the sidebar"
+      aria-label={label}
       onPointerDown={start}
       /* Keyboard-reachable too: a mouse-only resize is not a resize for
          everyone. */
       onKeyDown={(e) => {
-        if (e.key === 'ArrowLeft') onWidth(-1);
-        if (e.key === 'ArrowRight') onWidth(-2);
+        if (e.key === 'ArrowLeft') onWidth(edge === 'left' ? -1 : -2);
+        if (e.key === 'ArrowRight') onWidth(edge === 'left' ? -2 : -1);
       }}
     />
   );
@@ -218,6 +234,10 @@ export function Shell({
     const stored = Number(localStorage.getItem(SIDEBAR.key));
     return Number.isFinite(stored) && stored >= SIDEBAR.min ? stored : 260;
   });
+  const [rightWidth, setRightWidth] = useState(() => {
+    const stored = Number(localStorage.getItem(INSPECTOR.key));
+    return Number.isFinite(stored) && stored >= INSPECTOR.min ? stored : 320;
+  });
   const wide = useMediaQuery(WIDE);
   const docked = inspector && wide && !focus && !!cs && !!game;
 
@@ -227,6 +247,21 @@ export function Shell({
     document.body.style.setProperty('--app-sidebar-w', `${width}px`);
     localStorage.setItem(SIDEBAR.key, String(width));
   }, [width]);
+
+  useEffect(() => {
+    document.body.style.setProperty('--app-inspector-w', `${rightWidth}px`);
+    localStorage.setItem(INSPECTOR.key, String(rightWidth));
+  }, [rightWidth]);
+
+  /* The right pane grows leftwards, so the pointer's distance from the window's
+     right edge is the width. */
+  const resizeRight = useCallback((clientX: number) => {
+    setRightWidth((current) => {
+      const next =
+        clientX === -1 ? current - 16 : clientX === -2 ? current + 16 : window.innerWidth - clientX;
+      return Math.round(Math.min(INSPECTOR.max, Math.max(INSPECTOR.min, next)));
+    });
+  }, []);
 
   const resize = useCallback((clientX: number) => {
     setWidth((current) => {
@@ -280,7 +315,7 @@ export function Shell({
     <div className="app-shell" data-focus={focus}>
       {game && !focus && sidebar && (
         <GamePanel game={game} cs={cs} onExit={onExit}>
-          <Resizer onWidth={resize} />
+          <Resizer edge="left" label="Resize the sidebar" onWidth={resize} />
         </GamePanel>
       )}
 
@@ -343,7 +378,11 @@ export function Shell({
         </div>
       </div>
 
-      {docked && cs && <AchievementsPanel cs={cs} onClose={() => setInspector(false)} />}
+      {docked && cs && (
+        <AchievementsPanel cs={cs} onClose={() => setInspector(false)}>
+          <Resizer edge="right" label="Resize the achievements panel" onWidth={resizeRight} />
+        </AchievementsPanel>
+      )}
 
       {/* Focus mode hides the titlebar, so this is the way out that does not
           require knowing about Escape. Faint until it is wanted. */}

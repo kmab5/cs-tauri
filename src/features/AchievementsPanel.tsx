@@ -23,9 +23,12 @@ import type { ChoiceScriptApi } from '@/lib/choicescript';
 export function AchievementsPanel({
   cs,
   onClose,
+  children,
 }: {
   cs: ChoiceScriptApi;
   onClose: () => void;
+  /** The width grip, which has to live inside the panel it resizes. */
+  children?: React.ReactNode;
 }) {
   const state = useSyncExternalStore(cs.subscribe, cs.getState, cs.getState);
   const list = state.achievements;
@@ -90,6 +93,7 @@ export function AchievementsPanel({
           </>
         )}
       </div>
+      {children}
     </aside>
   );
 }

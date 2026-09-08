@@ -90,7 +90,6 @@ jobs:
               Copy-Item "src-tauri/games/*.cszip" "$stage/games/"
             }
           }
-          Copy-Item "README.md" "$stage/README.md"
           Compress-Archive -Path "$stage/*" -DestinationPath "$stage.zip" -Force
 
       - name: Collect the artefacts

@@ -122,9 +122,31 @@ async function flushBeforeClose() {
   await appWindow.onCloseRequested(async (event) => {
     if (!dirty.size && !timer) return;
     event.preventDefault();
-    await flushNow();
-    await inFlight;
-    await appWindow.destroy();
+    try {
+      await flushNow();
+      await inFlight;
+    } catch (e) {
+      console.error('could not flush saves before closing', e);
+    }
+    /*
+     * This is why the window would not close, and why Alt+F4 did nothing: the
+     * close was cancelled here and then `destroy()` was rejected, because
+     * `core:window:allow-destroy` was not in the capability set. The permission
+     * is granted now, and the fallback means a future missing one strands
+     * nobody: whatever happens after the flush, the window goes away.
+     */
+    try {
+      await appWindow.destroy();
+    } catch (e) {
+      console.error('destroy failed, closing instead', e);
+      try {
+        await appWindow.close();
+      } catch {
+        /* Last resort. Cancelling a close and then failing to act on it is the
+           one outcome that traps the reader in the app. */
+        window.location.reload();
+      }
+    }
   });
 }
 

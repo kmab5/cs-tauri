@@ -11,8 +11,9 @@ use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::{AppHandle, Manager};
 
-use crate::archive::{self, Extracted};
+use crate::archive::{self, Extracted, PLAYER_DIR};
 use crate::paths;
+use crate::store;
 
 #[derive(Serialize)]
 pub struct ImportResult {
@@ -43,11 +44,23 @@ fn import_bytes(app: &AppHandle, bytes: &[u8], source: &str) -> Result<ImportRes
     let id = new_id();
     let dir = paths::game_dir(app, &id)?;
     match archive::extract(bytes, &dir) {
-        Ok(extracted) => Ok(ImportResult {
-            id,
-            extracted,
-            source: source.to_string(),
-        }),
+        Ok(extracted) => {
+            /* An archive this app exported brings the reader's saves with it.
+               They are written under the *new* id's namespace, so importing the
+               same export twice yields two independent copies rather than two
+               games sharing one save file. */
+            if let Some(raw) = &extracted.store {
+                if let Ok(map) = serde_json::from_str::<store::Map>(raw) {
+                    let file = paths::store_file(app, &format!("CS-{id}"))?;
+                    let _ = store::write_map(&file, &map);
+                }
+            }
+            Ok(ImportResult {
+                id,
+                extracted,
+                source: source.to_string(),
+            })
+        }
         Err(e) => {
             // A half-written game is worse than none. The manifest is written
             // separately, so anything left here would be invisible to the
@@ -257,4 +270,102 @@ pub fn import_bundled(app: &AppHandle) -> Result<Vec<ImportResult>, String> {
 #[tauri::command]
 pub async fn take_bundled(app: AppHandle) -> Result<Vec<ImportResult>, String> {
     import_bundled(&app)
+}
+
+fn add_dir(
+    zip: &mut zip::ZipWriter<std::fs::File>,
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    options: zip::write::SimpleFileOptions,
+) -> Result<(), String> {
+    use std::io::Write;
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(());
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(rel) = path.strip_prefix(root) else {
+            continue;
+        };
+        let name = rel.to_string_lossy().replace('\\', "/");
+        if path.is_dir() {
+            add_dir(zip, root, &path, options)?;
+        } else {
+            let data = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            zip.start_file(name, options).map_err(|e| e.to_string())?;
+            zip.write_all(&data).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+/// Export a game *and* everything the reader did in it, as one .cszip.
+///
+/// The layout is a normal published archive — `scenes/`, the assets beside it —
+/// plus a `choicescript-player/` folder holding the manifest and the save
+/// store. Any other player will ignore that folder and see an ordinary game;
+/// this one reads it back and the saves, achievements and per-game settings
+/// come with it.
+///
+/// It lands in the downloads folder rather than behind a file dialog, which
+/// would mean another plugin and another permission for one button. The path is
+/// returned so the front end can say where it went.
+#[tauri::command]
+pub async fn export_game(app: AppHandle, id: String) -> Result<String, String> {
+    use std::io::Write;
+
+    let dir = paths::game_dir(&app, &id)?;
+    if !dir.exists() {
+        return Err(format!("no game on disk for {id}"));
+    }
+    let manifest = std::fs::read(paths::manifest_file(&app, &id)?)
+        .map_err(|e| format!("manifest: {e}"))?;
+    let title = serde_json::from_slice::<serde_json::Value>(&manifest)
+        .ok()
+        .and_then(|v| v.get("title").and_then(|t| t.as_str()).map(str::to_string))
+        .unwrap_or_else(|| id.clone());
+
+    /* A filename someone can find again, with anything a filesystem might
+       object to replaced. */
+    let slug: String = title
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+        .to_lowercase();
+
+    let out_dir = app
+        .path()
+        .download_dir()
+        .or_else(|_| app.path().document_dir())
+        .map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+    let target = out_dir.join(format!("{slug}.cszip"));
+
+    let file = std::fs::File::create(&target).map_err(|e| format!("{}: {e}", target.display()))?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default();
+
+    /* scenes/ and the assets, flattened back to the shape a game ships in. */
+    add_dir(&mut zip, &dir, &paths::scenes_dir(&app, &id)?, options)?;
+    add_dir(&mut zip, &paths::assets_dir(&app, &id)?, &paths::assets_dir(&app, &id)?, options)?;
+
+    zip.start_file(format!("{PLAYER_DIR}manifest.json"), options)
+        .map_err(|e| e.to_string())?;
+    zip.write_all(&manifest).map_err(|e| e.to_string())?;
+
+    let store_file = paths::store_file(&app, &format!("CS-{id}"))?;
+    let saves = store::read_map(&store_file)?;
+    if !saves.is_empty() {
+        zip.start_file(format!("{PLAYER_DIR}store.json"), options)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&serde_json::to_vec(&saves).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+    }
+
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(target.to_string_lossy().to_string())
 }

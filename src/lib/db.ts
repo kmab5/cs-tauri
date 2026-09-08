@@ -65,6 +65,14 @@ export async function libraryBytes(): Promise<number> {
   return invoke<number>('library_bytes');
 }
 
+/**
+ * Write a game and the reader's data to one .cszip in the downloads folder,
+ * and return where it went.
+ */
+export async function exportGame(id: string): Promise<string> {
+  return invoke<string>('export_game', { id });
+}
+
 /** Hand an archive to Rust, which unpacks it and reports what it found. */
 export async function ingest(file: File): Promise<Ingested> {
   const bytes = new Uint8Array(await file.arrayBuffer());

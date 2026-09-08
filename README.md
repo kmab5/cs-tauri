@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.1.8` reads as **major release · major update · session**. `package.json` is
+`0.1.9` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -44,9 +44,9 @@ disagrees with either.
 Pushing a `v*` tag builds and publishes:
 
 ```bash
-npm version 0.1.9 --no-git-tag-version   # then update src-tauri/Cargo.toml
-git commit -am "release: v0.1.9"
-git tag v0.1.9 && git push --follow-tags
+npm version 0.1.10 --no-git-tag-version   # then update src-tauri/Cargo.toml
+git commit -am "release: v0.1.10"
+git tag v0.1.10 && git push --follow-tags
 ```
 
 `.github/workflows/release.yml` then runs the tests, builds the NSIS installer,
@@ -250,6 +250,26 @@ about the filter rules, which have their own tests in Rust where they belong.
 Everything runs on Windows, macOS and Linux — no shell, no `zip` binary, no
 `/tmp` assumptions. The harness builds its fixture archive in JavaScript and
 ships a small sample game, so it needs no arguments.
+
+## Exporting a game with its saves
+
+**Export with saves** in the sidebar, or the share icon on a shelf card, writes
+one `.cszip` to your downloads folder:
+
+```
+scenes/*.txt                            the game, as it ships
+<assets>                                its images, beside the scenes
+choicescript-player/manifest.json       title, author, scene list, achievements
+choicescript-player/store.json          saves, achievements, per-game settings
+```
+
+Any other ChoiceScript player ignores that folder and sees an ordinary game.
+This one reads it back on import, so a game and everything you did in it travel
+together — to another machine, or into a backup.
+
+The saves are restored under the *new* import's id, so importing the same
+export twice gives two independent copies rather than two games writing to one
+save file.
 
 ## Why the stats screen is a dialog
 

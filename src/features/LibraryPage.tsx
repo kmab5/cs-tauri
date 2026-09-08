@@ -7,9 +7,16 @@
  * a game out from under a live interpreter by accident.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Clock, Plus, Share2, Trash2 } from 'lucide-react';
 
-import { deleteGame, importGame, listGames, loadIcon, type StoredGame } from '@/lib/library';
+import {
+  deleteGame,
+  exportGame,
+  importGame,
+  listGames,
+  loadIcon,
+  type StoredGame,
+} from '@/lib/library';
 import { useDesktopImports } from '@/lib/desktop/openWith';
 import { useMenu } from '@/lib/desktop/menu';
 import { DropOverlay } from './DropOverlay';
@@ -28,13 +35,66 @@ function Cover({ game }: { game: StoredGame }) {
   return <span className="lib-cover">{game.title.slice(0, 1).toUpperCase()}</span>;
 }
 
-function when(iso: string): string {
+/** A small pressable that is not a <button>, since the card itself is one. */
+function CardAction({
+  label,
+  className,
+  armed,
+  onAct,
+  children,
+}: {
+  label: string;
+  className: string;
+  armed?: boolean;
+  onAct: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      className={className}
+      data-armed={armed}
+      aria-label={label}
+      title={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onAct();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          onAct();
+        }
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function when(iso: string, verb = 'added'): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
   if (!Number.isFinite(days)) return '';
-  if (days <= 0) return 'added today';
-  if (days === 1) return 'added yesterday';
-  if (days < 30) return `added ${days} days ago`;
-  return `added ${new Date(iso).toLocaleDateString()}`;
+  if (days <= 0) return `${verb} today`;
+  if (days === 1) return `${verb} yesterday`;
+  if (days < 30) return `${verb} ${days} days ago`;
+  return `${verb} ${new Date(iso).toLocaleDateString()}`;
+}
+
+/** The rail's thumbnail: the same art, at a size that fits a list. */
+function RailArt({ game }: { game: StoredGame }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    void loadIcon(game).then((url) => live && setSrc(url));
+    return () => {
+      live = false;
+    };
+  }, [game]);
+  if (src) return <img src={src} alt="" loading="lazy" />;
+  return <span className="lib-recent-art">{game.title.slice(0, 1).toUpperCase()}</span>;
 }
 
 export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) {
@@ -43,6 +103,7 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
+  const [exported, setExported] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(() => {
@@ -73,11 +134,39 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
     `${game.title} ${game.author}`.toLowerCase().includes(filter.trim().toLowerCase()),
   );
 
+  /* Most recent first, and only games that have actually been opened. */
+  const recent = (games ?? [])
+    .filter((game) => !!game.lastPlayedAt)
+    .sort((a, b) => (a.lastPlayedAt! < b.lastPlayedAt! ? 1 : -1))
+    .slice(0, 8);
+
   return (
-    <div className="lib">
+    <div className="lib-shell">
       {/* Dropping is only offered here. Mid-game there is nothing sensible to
           do with an archive except queue it for a reload. */}
       <DropOverlay onImported={refresh} onBusy={setBusy} onError={setError} />
+
+      {/* The shelf grows; the handful of games being read does not. */}
+      {recent.length > 0 && (
+        <aside className="lib-rail" aria-label="Recently played">
+          <div className="lib-rail-head">
+            <Clock className="mr-1 inline size-3" aria-hidden /> Recently played
+          </div>
+          <div className="lib-rail-list">
+            {recent.map((game) => (
+              <button key={game.id} className="lib-recent" onClick={() => onPlay(game)}>
+                <RailArt game={game} />
+                <span className="lib-recent-text">
+                  <span className="lib-recent-name">{game.title}</span>
+                  <span className="lib-recent-when">{when(game.lastPlayedAt!, 'played')}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
+
+      <div className="lib">
 
       <header className="lib-head">
         <div>
@@ -127,6 +216,11 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
           {error}
         </p>
       )}
+      {exported && (
+        <p className="app-note mt-4" role="status">
+          Exported with its saves to <code className="font-mono">{exported}</code>
+        </p>
+      )}
 
       <div className="lib-grid">
         {games !== null && !games.length && (
@@ -164,33 +258,44 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
               <span className="lib-card-meta">{when(game.uploadedAt)}</span>
             </span>
 
-            {/* Two steps rather than a confirm dialog: this removes files from
-                disk, and a misclick should not be one click away. */}
-            <span
-              role="button"
-              tabIndex={0}
-              className="app-btn lib-del"
-              data-armed={confirming === game.id}
-              aria-label={`Delete ${game.title}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirming !== game.id) return setConfirming(game.id);
-                deleteGame(game.id)
-                  .then(() => {
-                    setConfirming(null);
-                    refresh();
-                  })
-                  .catch((err: Error) => setError(err.message));
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') e.currentTarget.click();
-              }}
-              onBlur={() => setConfirming(null)}
-            >
-              {confirming === game.id ? 'Sure?' : <Trash2 className="size-3.5" aria-hidden />}
+            <span className="lib-actions">
+              {/* Exports the game *and* the reader's saves and achievements. */}
+              <CardAction
+                label={`Export ${game.title} with its saves`}
+                className="app-btn lib-act"
+                onAct={() => {
+                  setExported(null);
+                  setError(null);
+                  exportGame(game.id)
+                    .then((path) => setExported(path))
+                    .catch((err: Error) => setError(err.message));
+                }}
+              >
+                <Share2 className="size-3.5" aria-hidden />
+              </CardAction>
+
+              {/* Two steps rather than a confirm dialog: this removes files from
+                  disk, and a misclick should not be one click away. */}
+              <CardAction
+                label={`Delete ${game.title}`}
+                className="app-btn lib-act"
+                armed={confirming === game.id}
+                onAct={() => {
+                  if (confirming !== game.id) return setConfirming(game.id);
+                  deleteGame(game.id)
+                    .then(() => {
+                      setConfirming(null);
+                      refresh();
+                    })
+                    .catch((err: Error) => setError(err.message));
+                }}
+              >
+                {confirming === game.id ? 'Sure?' : <Trash2 className="size-3.5" aria-hidden />}
+              </CardAction>
             </span>
           </button>
         ))}
+        </div>
       </div>
     </div>
   );

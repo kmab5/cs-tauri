@@ -1,6 +1,6 @@
 [package]
 name = "cs-tauri"
-version = "0.1.8"
+version = "0.1.9"
 description = "A ChoiceScript player for the desktop. Games and saves stay on your own machine."
 authors = ["kmab5"]
 edition = "2021"

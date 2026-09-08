@@ -29,6 +29,9 @@ const PORT = 9950 + Math.floor(Math.random() * 40);
 
 let pass = 0,
   fail = 0;
+/* Not every game exercises every feature: an assertion about a *choice in a
+   stats screen cannot fail a game whose stats screen has none. */
+const skip = (n, why) => console.log('  --   ' + n + '  (' + why + ')');
 const ok = (n, c, e) => {
   c
     ? (pass++, console.log('  ok   ' + n))
@@ -123,7 +126,19 @@ const SAMPLE = [
       '    *finish\n',
   ],
   ['scenes/second.txt', 'Morning comes to the canal.\n*finish\n'],
-  ['scenes/choicescript_stats.txt', '*stat_chart\n  percent warmth Warmth\n*finish\n'],
+  [
+    'scenes/choicescript_stats.txt',
+    '*stat_chart\n  percent warmth Warmth\n' +
+      'How do you carry yourself?\n' +
+      '*choice\n' +
+      '  #Briskly.\n' +
+      '    *set warmth +5\n' +
+      '    *goto done\n' +
+      '  #Slowly.\n' +
+      '    *goto done\n' +
+      '*label done\n' +
+      '*finish\n',
+  ],
 ];
 
 /* ------------------------------------------------------- the mocked backend */
@@ -293,6 +308,7 @@ function makeBridge(dataDir, archivePath) {
     'plugin:window|set_fullscreen': () => null,
     set_game_menu_enabled: () => null,
     set_menu_visible: () => null,
+    export_game: () => path.join(dataDir, 'exported.cszip'),
     'plugin:opener|open_url': ({ url }) => {
       calls.push('open_url:' + url);
       return null;
@@ -579,6 +595,55 @@ server.listen(PORT, async () => {
     win.ChoiceScript.closeOverlay();
     await new Promise((r) => setTimeout(r, 300));
   }
+
+  console.log('\nan interactive stats screen answers itself, not the story');
+  /*
+   * The bug this replaces: the stats dialog reused the story's radio ids, so a
+   * <label htmlFor> inside it resolved to the story's radio behind the dialog
+   * and answering the stats screen silently picked a story option.
+   */
+  const storyBefore = d.querySelector('.app-reading input[type=radio]:checked');
+  win.ChoiceScript.openStats();
+  await new Promise((r) => setTimeout(r, 700));
+  const dialogRadios = Array.prototype.slice.call(
+    d.querySelectorAll('[role=dialog] input[type=radio]'),
+  );
+  if (!dialogRadios.length) {
+    skip('the stats screen offers its own choice', "this game's stats screen has none");
+  } else {
+    ok('the stats screen offers its own choice', dialogRadios.length >= 2,
+      dialogRadios.length + ' radios');
+    ok('its ids are scoped to the stats channel',
+      dialogRadios.every((r) => r.id.startsWith('stats-')),
+      dialogRadios.map((r) => r.id).join(', '));
+    ok("and its radio group is separate from the story's",
+      dialogRadios.every((r) => r.name.startsWith('stats-')),
+      dialogRadios.map((r) => r.name).join(', '));
+  }
+
+  if (dialogRadios.length) {
+    const label = d.querySelector(`[role=dialog] label[for="${dialogRadios[0].id}"]`);
+    ok('its label points into the dialog, not the page',
+      !!label && d.getElementById(dialogRadios[0].id).closest('[role=dialog]') !== null);
+    if (label) label.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 300));
+    ok('answering it left the story choice alone',
+      (d.querySelector('.app-reading input[type=radio]:checked') || null) === storyBefore);
+  }
+  win.ChoiceScript.closeOverlay();
+  await new Promise((r) => setTimeout(r, 300));
+
+  console.log('\nthe game travels with its saves');
+  ok('exporting is offered in the sidebar',
+    !!Array.prototype.slice
+      .call(d.querySelectorAll('aside[aria-label="This game"] button'))
+      .find((b) => /Export/.test(b.textContent)));
+  ok('the panel shows facts as tiles, not a list of text',
+    d.querySelectorAll('.app-fact').length >= 2,
+    d.querySelectorAll('.app-fact').length + ' tiles');
+  ok('opening the game stamped it as played',
+    !!manifest && games.length === 1 &&
+      !!JSON.parse(fs.readFileSync(path.join(gameDir, 'manifest.json'), 'utf8')).lastPlayedAt);
 
   console.log('\nthe chrome follows the theme');
   const paper = () => win.getComputedStyle(d.body).getPropertyValue('--cs-paper').trim();

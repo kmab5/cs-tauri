@@ -1,6 +1,13 @@
 import { useCallback, useState } from 'react';
 import type { ChoiceScriptApi } from '@/lib/choicescript';
-import { loadEngine, loadIcon, openGame, releaseAssets, type StoredGame } from '@/lib/library';
+import {
+  loadEngine,
+  loadIcon,
+  openGame,
+  releaseAssets,
+  touchGame,
+  type StoredGame,
+} from '@/lib/library';
 import { Shell } from '@/features/Shell';
 import { Button } from '@/components/ui/button';
 import { getTheme, getZoom } from '@/lib/theme';
@@ -24,6 +31,7 @@ export default function App() {
            story does not open in a different palette from the shelf. */
         engine.setTheme(getTheme());
         engine.setZoom(getZoom());
+        void touchGame(manifest);
         setGame(manifest);
         setCs(engine);
       })

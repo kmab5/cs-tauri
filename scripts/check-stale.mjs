@@ -30,6 +30,11 @@ const REMOVED = [
   ['src/lib/db.web.ts', 'the IndexedDB backend; storage is files on disk now'],
   ['src/lib/db.tauri.ts', 'became src/lib/db.ts — there is one backend, not two'],
   ['src/lib/archive.ts', 'browser zip reading; extraction lives in src-tauri/src/archive.rs'],
+
+  /* 0.1.9 */
+  ['src/features/Sidebar.tsx', 'the game list sidebar, replaced by GamePanel.tsx'],
+  ['src/features/StatsPanel.tsx', 'the docked stats sheet — stats are a dialog again'],
+  ['src/lib/desktop/appearance.ts', 'separate window appearance; the chrome follows the theme'],
 ];
 
 const found = REMOVED.filter(([p]) => existsSync(join(root, p)) && statSync(join(root, p)).isFile());
