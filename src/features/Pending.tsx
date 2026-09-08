@@ -98,7 +98,7 @@ function Choice({
         return (
           <fieldset key={depth} className="mb-4 border-0 p-0">
             {group && (
-              <legend className="pb-3 font-ui text-sm uppercase tracking-wider text-ink-faint">
+              <legend className="pb-3 font-ui text-sm uppercase tracking-wider text-ink-muted">
                 Select {group}
               </legend>
             )}
@@ -143,7 +143,7 @@ function Choice({
                         'peer-checked:border-accent peer-checked:bg-accent-wash',
                         'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent',
                         option.unselectable &&
-                          'cursor-not-allowed border-dashed bg-transparent text-ink-faint hover:border-rule',
+                          'cursor-not-allowed border-dashed bg-transparent text-ink-muted hover:border-rule',
                       )}
                     >
                       {/* the rail: fills on intent. An affordance, not decoration. */}
@@ -161,7 +161,7 @@ function Choice({
                           aria-hidden="true"
                           className={cn(
                             'shrink-0 pt-0.5 font-ui text-sm tabular-nums transition-colors',
-                            checked ? 'text-accent' : 'text-ink-faint',
+                            checked ? 'text-accent' : 'text-ink-muted',
                           )}
                         >
                           {i + 1}

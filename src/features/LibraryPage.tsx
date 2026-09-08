@@ -173,7 +173,7 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
           <h1>Library</h1>
           <p className="lib-count">
             {games === null
-              ? 'Reading your games…'
+              ? 'Reading the shelf'
               : games.length === 1
                 ? '1 game on this machine'
                 : `${games.length} games on this machine`}
@@ -223,6 +223,17 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
       )}
 
       <div className="lib-grid">
+        {/* Skeletons, not a spinner: the shelf keeps its shape while it loads,
+            so nothing jumps when the games arrive. */}
+        {games === null &&
+          [0, 1, 2, 3].map((i) => (
+            <div key={i} className="lib-skeleton" aria-hidden>
+              <span />
+              <span />
+              <span />
+            </div>
+          ))}
+
         {games !== null && !games.length && (
           <div className="lib-empty">
             <p>
@@ -246,7 +257,12 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
         {shown.map((game) => (
           /* The whole card starts the game. A Play button inside a card that is
              itself clickable is two targets for one action. */
-          <button key={game.id} className="lib-card" onClick={() => onPlay(game)}>
+          <button
+            key={game.id}
+            className="lib-card"
+            aria-label={`Play ${game.title}${game.author ? ` by ${game.author}` : ''}`}
+            onClick={() => onPlay(game)}
+          >
             <Cover game={game} />
             <span className="lib-card-body">
               <span className="lib-card-title">{game.title}</span>

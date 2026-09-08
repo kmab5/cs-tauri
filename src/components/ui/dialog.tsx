@@ -30,13 +30,13 @@ export function DialogPanel({ open, onOpenChange, title, children }: PanelProps)
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
           className={cn(
-            'fixed inset-0 z-30 bg-black/40 backdrop-blur-[2px]',
+            'fixed inset-0 z-[var(--z-scrim)] bg-black/40 backdrop-blur-[2px]',
             'data-[state=open]:animate-[cs-fade_200ms_cubic-bezier(0.16,1,0.3,1)]',
           )}
         />
         <DialogPrimitive.Content
           className={cn(
-            'fixed left-1/2 top-1/2 z-40 w-[calc(100%-2rem)] max-w-[60ch]',
+            'fixed left-1/2 top-1/2 z-[var(--z-modal)] w-[calc(100%-2rem)] max-w-[60ch]',
             '-translate-x-1/2 -translate-y-1/2',
             'flex max-h-[85vh] flex-col overflow-hidden rounded-xl',
             'border border-rule bg-paper text-ink shadow-2xl outline-none',

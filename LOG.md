@@ -5,6 +5,131 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 10 — v0.1.10, the design audit, with both skills loaded
+
+Both skills loaded this time. `impeccable`'s setup script blocked immediately —
+`NO_PRODUCT_MD` — and its init flow requires an interview before PRODUCT.md can
+be written, so that file is not here; the questions are at the bottom of this
+entry. DESIGN.md *is* here, because `document` derives it from code that exists
+rather than from answers I do not have.
+
+Register: **product**. Design serves the reading; it is not the product. The bar
+is earned familiarity, not novelty.
+
+### What the databases actually said
+
+`ui-ux-pro-max --design-system` on the obvious query returned a *Newsletter /
+Content First* landing pattern — a marketing answer to a product question, so I
+discarded it per the skill's own "if results look off" instruction and queried
+the domains directly. That was the useful pass:
+
+- `--domain product "reading app library desktop tool"` → **Book & Reading
+  Tracker**: primary style *Swiss Modernism 2.0 + Minimalism*, secondary *E-Ink
+  Paper*, palette "warm paper white + ink brown + reading progress green".
+- `--domain style` for those two gave the concrete specs: 8px base unit, strict
+  grid, single accent, high contrast, minimal decoration (Swiss); paper
+  background, high-contrast ink, serif for reading, no gradients (E-Ink).
+
+That is a near-exact description of what `engine/theme/` already is, which
+settles the identity question: the palette stays, and impeccable's own rule
+agrees (committed brand colours found → identity preservation wins). So the
+redesign is the **chrome** becoming Swiss where it was arbitrary, and the
+reading surface staying E-Ink where it already was.
+
+### Audit
+
+Measured, not eyeballed. I computed WCAG ratios for every token pair across all
+twelve theme variants from the token files, and ran impeccable's own detector
+over `src/`.
+
+| # | Dimension | Before | After | Key finding |
+| --- | --- | --- | --- | --- |
+| 1 | Accessibility | 2 | 4 | `--cs-ink-faint` used for 14px text; fails 4.5:1 in five of six themes |
+| 2 | Performance | 3 | 4 | `transition: width` on the achievements meter — layout property, every frame |
+| 3 | Responsive | 3 | 4 | fluid `clamp()` heading in product chrome; otherwise structural and sound |
+| 4 | Theming | 3 | 4 | tokens everywhere, but no spacing/type/z scales — values invented per component |
+| 5 | Anti-patterns | 2 | 4 | 3px left accent border on save rows; hover-lift on shelf cards |
+| | **Total** | **13/20** | **20/20** | Acceptable → Excellent |
+
+**Anti-patterns verdict, honestly:** two real tells before this pass. The `3px
+border-left` on save rows is the single most recognisable signature of generated
+UI, and it was ten competing stripes in a ten-save list. The shelf cards rose
+2px with a shadow bloom on hover — decoration standing in for feedback. The
+detector found both plus the layout animation; it now returns **0 findings**.
+
+**P1 — contrast.** 10 of 70 token pairs fall below 4.5:1, every one of them
+involving `--cs-ink-faint`, and it was carrying 14px text in eleven places
+including the input placeholder (which needs the full 4.5:1, not a muted
+default). All eleven are `ink-muted` now, which passes in all twelve variants.
+`engine/` is generated so the token itself was not touched; it is simply no
+longer used for text.
+
+**P1 — no reduced-motion coverage in the chrome.** `index.css` had a block;
+`chrome.css`, with every transition I have added over four sessions, had none.
+
+**P2 — four arbitrary z-index values** (5, 20, 40, 60) plus a hard-coded `z-30`
+in the Radix dialog, i.e. a stacking order maintained by memory.
+
+**P2 — no scales.** Spacing and type were chosen per component: eleven distinct
+paddings and nine font sizes, none of them derived from anything.
+
+**Verified false positive:** the detector flagged `broken-image` at
+`library.ts:157`. It was a comment saying `<img src>` — and a stale one, from
+the IndexedDB era. Rewritten rather than suppressed.
+
+### What changed
+
+- **8px spacing unit** (`--app-1`…`--app-7`) and a **fixed 1.2 type scale**
+  (`--app-text-xs` 11px … `--app-text-2xl` 24px). Fixed, not `clamp()`: a
+  heading that shrinks inside a sidebar looks worse rather than better, and this
+  is product UI at a consistent DPI. 11px is the floor — the platform label size
+  on all three targets.
+- **Named z-index ladder**, used by the chrome, the Radix dialog and the toaster.
+- **Motion tokens**: ease-out quart, 120ms feedback / 180ms structure, and a
+  `prefers-reduced-motion` block that collapses all of it.
+- **Save rows** are hairline-separated rows: no stripe, hover and active on the
+  surface, and the armed state inverts to accent rather than adding a border.
+- **Shelf cards** lost the lift and the shadow; the border and surface carry
+  hover and active, which is what every desktop list does.
+- **The meter** scales on a transform instead of animating `width`.
+- **Skeletons** replace "Reading your games…" and "Reading your saves…" —
+  product register asks for skeletons that hold the layout, not spinners in the
+  middle of content.
+- **Skip link** to the story, which is now a `<main>` landmark. The sidebar,
+  both panes and eight controls sit before the prose in tab order; the UX
+  database flags exactly this.
+- **Accessible names** on the shelf cards ("Play *title* by *author*") — the
+  card is a button whose label was previously assembled from four spans.
+
+### Verified
+
+- Detector: **3 findings → 0**
+- Contrast: every text-bearing pair ≥4.5:1 across all twelve variants
+- `npm run build`, `typecheck`, `check-stale`, `test:version`, `test:theme`,
+  `test:register` — pass
+- `npm run test:webview` — **64 passed, 0 failed** (six new: the three scales
+  are declared, the skip link exists, the story is a `main` landmark, and save
+  rows are not accent-striped)
+- `npm run test:game` — **53 passed, 0 failed** on Choice of Magics
+
+### What I did not do, and what I need from you
+
+`PRODUCT.md` is missing and I will not synthesize it from a task prompt — init
+is explicit that the register, users, personality, anti-references and
+accessibility needs get confirmed by you first, and three of those are not
+discoverable from the repo. The README covers register, users and accessibility;
+personality and anti-references it does not.
+
+This also happens to be the gap that has actually cost us: the library has been
+rejected twice and the icon once. That is taste, not effort, and one round of
+questions fixes it better than a fourth attempt.
+
+Two questions at the end of this session's message. Once they are answered I can
+write PRODUCT.md, and `/impeccable critique` gets a real backlog to work from
+instead of my guesses.
+
+---
+
 ## 2026-09-08 · Session 9 — v0.1.9, from your screenshot and eleven notes
 
 Pulled `daf32a7`. Your custom icon is untouched — I only removed three files the

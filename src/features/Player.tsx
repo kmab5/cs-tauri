@@ -45,7 +45,7 @@ export function Player({
     <div>
 
       {state.loading && (
-        <p className="font-ui text-sm text-ink-faint" role="status">
+        <p className="font-ui text-sm text-ink-muted" role="status">
           Loading…
         </p>
       )}

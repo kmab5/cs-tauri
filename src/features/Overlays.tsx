@@ -102,7 +102,7 @@ function Saves({ cs }: { cs: ChoiceScriptApi }) {
               >
                 <span className="flex items-baseline justify-between gap-3">
                   <span className="font-ui font-medium">{save.name || 'Untitled save'}</span>
-                  <span className="shrink-0 font-ui text-sm tabular-nums text-ink-faint">
+                  <span className="shrink-0 font-ui text-sm tabular-nums text-ink-muted">
                     {relativeTime(save.savedAt ?? save.timestamp)}
                   </span>
                 </span>
@@ -133,7 +133,7 @@ function Chips({
 }) {
   return (
     <fieldset className="mb-5 border-0 border-t border-rule p-0 pt-4 first:border-t-0 first:pt-0">
-      <legend className="font-ui text-sm uppercase tracking-wider text-ink-faint">
+      <legend className="font-ui text-sm uppercase tracking-wider text-ink-muted">
         {legend}
       </legend>
       <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2">
@@ -179,7 +179,7 @@ function Settings({ cs, state }: { cs: ChoiceScriptApi; state: ChoiceScriptState
       <Chips legend="Line width" items={cs.widths()} current={theme.width} onPick={cs.setWidth} />
 
       <fieldset className="mb-5 border-0 border-t border-rule p-0 pt-4">
-        <legend className="font-ui text-sm uppercase tracking-wider text-ink-faint">
+        <legend className="font-ui text-sm uppercase tracking-wider text-ink-muted">
           Text size
         </legend>
         <div className="mt-3 flex items-center gap-3">
@@ -196,7 +196,7 @@ function Settings({ cs, state }: { cs: ChoiceScriptApi; state: ChoiceScriptState
       </fieldset>
 
       <fieldset className="mb-5 border-0 border-t border-rule p-0 pt-4">
-        <legend className="font-ui text-sm uppercase tracking-wider text-ink-faint">Motion</legend>
+        <legend className="font-ui text-sm uppercase tracking-wider text-ink-muted">Motion</legend>
         <div className="mt-3 flex items-center gap-2">
           <input
             type="checkbox"
@@ -211,7 +211,7 @@ function Settings({ cs, state }: { cs: ChoiceScriptApi; state: ChoiceScriptState
       </fieldset>
 
       <fieldset className="border-0 border-t border-rule p-0 pt-4">
-        <legend className="font-ui text-sm uppercase tracking-wider text-ink-faint">Game</legend>
+        <legend className="font-ui text-sm uppercase tracking-wider text-ink-muted">Game</legend>
         <div className="mt-3">
           <Button variant="danger" onClick={() => cs.restart()}>
             Restart from the beginning
@@ -235,7 +235,7 @@ function Achievements({ state }: { state: ChoiceScriptState }) {
     >
       <div className="font-ui font-medium">{x.title}</div>
       <div className="text-[0.9375rem]">{x.description}</div>
-      <div className="mt-1 font-ui text-sm tabular-nums text-ink-faint">
+      <div className="mt-1 font-ui text-sm tabular-nums text-ink-muted">
         {x.points} {x.points === 1 ? 'point' : 'points'}
       </div>
     </li>

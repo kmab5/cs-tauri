@@ -305,7 +305,11 @@ function Saves({ cs }: { cs: ChoiceScriptApi }) {
       {message && <p className="app-note mb-2">{message}</p>}
 
       {saves === null ? (
-        <p className="app-note">Reading your saves…</p>
+        <div aria-hidden>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="app-skeleton mb-1.5 h-8" />
+          ))}
+        </div>
       ) : !saves.length ? (
         <p className="app-note">No saves yet. The story autosaves as you read.</p>
       ) : (

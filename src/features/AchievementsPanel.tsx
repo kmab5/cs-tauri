@@ -66,7 +66,7 @@ export function AchievementsPanel({
               aria-valuemax={list.total}
               aria-label="Achievements earned"
             >
-              <span style={{ width: `${pct}%` }} />
+              <span style={{ transform: `scaleX(${pct / 100})`, width: '100%' }} />
             </div>
 
             <ul className="app-achievements">

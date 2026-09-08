@@ -153,8 +153,8 @@ export async function touchGame(game: StoredGame): Promise<void> {
 /* ------------------------------------------------------------------ assets */
 
 /**
- * Assets live in IndexedDB as Blobs, so they need object URLs to be reachable
- * from `<img src>`. One registry per game, revoked when another game opens.
+ * Assets are files on disk, reached through the asset protocol. One registry of
+ * name to URL per game, replaced when another game opens.
  */
 let activeAssets: { gameId: string; urls: Map<string, string> } | null = null;
 

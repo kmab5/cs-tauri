@@ -645,6 +645,20 @@ server.listen(PORT, async () => {
     !!manifest && games.length === 1 &&
       !!JSON.parse(fs.readFileSync(path.join(gameDir, 'manifest.json'), 'utf8')).lastPlayedAt);
 
+  console.log('\nthe design system holds');
+  const varOf = (name) => win.getComputedStyle(d.body).getPropertyValue(name).trim();
+  ok('the spacing scale is declared', varOf('--app-2') === '8px', varOf('--app-2'));
+  ok('the type scale is declared', varOf('--app-text-md') !== '', varOf('--app-text-md'));
+  ok('the z-index ladder is declared', varOf('--z-modal') !== '', varOf('--z-modal'));
+  ok('there is a skip link to the story', !!d.querySelector('a.app-skip[href="#story"]'));
+  ok('the story is a main landmark', !!d.querySelector('main.app-reading#story'));
+  /* The old save row carried a 3px left accent border — the detector's top AI
+     tell, and ten competing stripes in a ten-save list. */
+  const save = d.querySelector('.app-save');
+  ok('save rows are rows, not accent-striped cards',
+    !save || win.getComputedStyle(save).borderLeftWidth !== '3px',
+    save ? win.getComputedStyle(save).borderLeftWidth : 'no saves yet');
+
   console.log('\nthe chrome follows the theme');
   const paper = () => win.getComputedStyle(d.body).getPropertyValue('--cs-paper').trim();
   const chrome = () => win.getComputedStyle(d.body).getPropertyValue('--app-chrome').trim();

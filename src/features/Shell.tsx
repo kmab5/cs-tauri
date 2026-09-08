@@ -313,6 +313,11 @@ export function Shell({
 
   return (
     <div className="app-shell" data-focus={focus}>
+      {/* Before everything, reachable only by keyboard. */}
+      <a className="app-skip" href="#story">
+        Skip to the story
+      </a>
+
       {game && !focus && sidebar && (
         <GamePanel game={game} cs={cs} onExit={onExit}>
           <Resizer edge="left" label="Resize the sidebar" onWidth={resize} />
@@ -366,7 +371,7 @@ export function Shell({
           </div>
         </header>
 
-        <div className="app-reading">
+        <main className="app-reading" id="story" tabIndex={-1}>
           {game && cs ? (
             <div className="app-measure">
               <ReadingKeys cs={cs} gameId={game.id} />
@@ -375,7 +380,7 @@ export function Shell({
           ) : (
             <LibraryPage onPlay={onPlay} />
           )}
-        </div>
+        </main>
       </div>
 
       {docked && cs && (
