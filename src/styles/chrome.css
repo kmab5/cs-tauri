@@ -120,20 +120,6 @@ body {
   scrollbar-gutter: stable;
 }
 
-/*
- * While the sheet is docked the story is readable but inert. The engine routes
- * every block to the stats channel for as long as its stats mode is up
- * (bus.js:74), so a choice answered underneath an open sheet would have its
- * result swallowed and the story would appear to stop.
- */
-.app-reading[data-inert='true'] {
-  pointer-events: none;
-}
-.app-reading[data-inert='true'] .cs-choices,
-.app-reading[data-inert='true'] form {
-  opacity: 0.45;
-}
-
 .app-measure {
   margin: 0 auto;
   /* min() so a narrow window shrinks the measure instead of clipping it. */
@@ -351,6 +337,7 @@ body {
 .app-inspector {
   display: flex;
   width: var(--app-inspector-w);
+  min-height: 0;
   flex-direction: column;
   border-left: 1px solid var(--app-border);
   background: var(--app-chrome);
@@ -382,7 +369,11 @@ body {
  */
 .app-inspector-body {
   flex: 1;
+  /* Without min-height a flex child refuses to shrink below its content, so
+     this never scrolled — the same trap as the reading pane. */
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.875rem 1rem 2rem;
   color: var(--cs-ink, #22201c);
   font-size: 0.875rem;
@@ -393,6 +384,54 @@ body {
   color: var(--app-label-dim);
   font-size: 0.75rem;
   line-height: 1.5;
+}
+
+/* ---------------------------------------------------- achievements panel */
+
+.app-meter {
+  overflow: hidden;
+  height: 6px;
+  margin: 0.5rem 0 1rem;
+  border-radius: 999px;
+  background: var(--app-chrome-sunken);
+}
+.app-meter span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--app-accent);
+  transition: width 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-achievements {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-achievements li {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+  color: var(--app-label);
+  font-family: var(--app-font-ui);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.app-achievements li[data-earned='false'] {
+  color: var(--app-label-dim);
+}
+.app-achievements li[data-earned='true'] svg {
+  color: var(--app-accent);
+}
+.app-achievements b {
+  display: block;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.app-achievements span span {
+  display: block;
+  color: var(--app-label-dim);
+  overflow-wrap: anywhere;
 }
 
 /* ------------------------------------------------------------ drop overlay */
@@ -483,30 +522,30 @@ body {
   border-radius: var(--app-radius);
   background: var(--app-chrome-sunken);
 }
-.app-detail h2 {
+.app-detail-title {
   margin: 0.75rem 0 0;
   font-size: 0.9375rem;
   font-weight: 600;
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
-.app-detail p {
+.app-detail-by {
   margin: 0.25rem 0 0;
   color: var(--app-label-dim);
   font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
-.app-detail dl {
+.app-pane-body dl {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 0.25rem 0.75rem;
   margin: 1rem 0 0;
   font-size: 0.75rem;
 }
-.app-detail dt {
+.app-pane-body dt {
   color: var(--app-label-dim);
 }
-.app-detail dd {
+.app-pane-body dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -514,92 +553,116 @@ body {
 /* ----------------------------------------------------------- library page */
 
 /*
- * The library is a page, not a placeholder. It gets the whole window when no
- * game is open, themes with everything else, and is the only place a game can
- * be chosen — once one is open the sidebar shows that game instead, so there is
- * no way to swap games out from under a running interpreter by accident.
+ * A shelf. Cover-led, because a game is recognised by its art long before its
+ * title is read, and the covers are the only thing on this screen the author
+ * made. The grid is auto-fill on a clamped minimum, so it reflows continuously
+ * from a phone-width window to a wide one instead of at chosen breakpoints.
  */
 .lib {
   margin: 0 auto;
-  max-width: min(72rem, 100%);
-  padding: clamp(1.5rem, 5vw, 3rem) clamp(1rem, 4vw, 2.5rem) 4rem;
+  max-width: min(84rem, 100%);
+  padding: clamp(1.25rem, 4vw, 2.75rem) clamp(1rem, 4vw, 2.5rem) 4rem;
+  font-family: var(--app-font-ui);
 }
+
 .lib-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.75rem 1rem;
   border-bottom: 1px solid var(--app-border);
   padding-bottom: 1rem;
 }
 .lib-head h1 {
   margin: 0;
-  font-family: var(--app-font-ui);
-  font-size: clamp(1.25rem, 3vw, 1.75rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: clamp(1.375rem, 3.5vw, 2rem);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
 }
-.lib-head p {
-  margin: 0.25rem 0 0;
+.lib-count {
+  margin: 0;
   color: var(--app-label-dim);
-  font-family: var(--app-font-ui);
   font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.lib-head-spacer {
+  flex: 1 1 2rem;
+}
+
+.lib-search {
+  min-width: 0;
+  width: clamp(8rem, 30vw, 14rem);
+  height: var(--app-control-h);
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-chrome);
+  padding: 0 0.75rem;
+  color: var(--app-label);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+.lib-search:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 1px;
 }
 
 .lib-grid {
   display: grid;
-  /* auto-fill with a minimum, so the shelf reflows at any window width rather
-     than at three hand-picked breakpoints. */
-  grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
-  gap: 1rem;
-  margin-top: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(8rem, 18vw, 11rem), 1fr));
+  gap: clamp(0.75rem, 2vw, 1.5rem);
+  margin-top: clamp(1rem, 3vw, 2rem);
 }
 
 .lib-card {
+  position: relative;
   display: flex;
-  gap: 0.875rem;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--app-border);
   border-radius: calc(var(--app-radius) * 2);
   background: var(--app-chrome);
-  padding: 0.875rem;
+  padding: 0;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: default;
-  transition: border-color 120ms ease, transform 120ms ease;
+  transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 .lib-card:hover {
   border-color: var(--app-accent);
-  transform: translateY(-1px);
+  box-shadow: var(--app-shadow);
+  transform: translateY(-2px);
 }
 .lib-card:focus-visible {
   outline: 2px solid var(--app-accent);
   outline-offset: 2px;
 }
+
 .lib-cover {
   display: grid;
-  height: 72px;
-  width: 56px;
-  flex-shrink: 0;
+  /* Posters, not thumbnails. Games without art get their initial at the same
+     size, so a mixed shelf still lines up. */
+  aspect-ratio: 3 / 4;
+  width: 100%;
   place-items: center;
-  overflow: hidden;
-  border-radius: var(--app-radius);
+  border-bottom: 1px solid var(--app-border);
   background: var(--app-chrome-sunken);
   object-fit: cover;
   color: var(--app-label-dim);
-  font-family: var(--app-font-ui);
-  font-size: 1.25rem;
+  font-size: clamp(1.5rem, 5vw, 2.5rem);
+  font-weight: 300;
 }
+
 .lib-card-body {
   min-width: 0;
-  font-family: var(--app-font-ui);
+  padding: 0.625rem 0.75rem 0.75rem;
 }
 .lib-card-title {
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 .lib-card-meta {
@@ -608,23 +671,211 @@ body {
   font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
-.lib-card-actions {
-  display: flex;
-  gap: 0.25rem;
-  margin-top: 0.5rem;
+
+/* Destructive, so it stays out of the way until the pointer is on the card and
+   never sits under the click that starts a game. */
+.lib-del {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  border-radius: var(--app-radius);
+  background: color-mix(in srgb, var(--app-chrome) 85%, transparent);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.lib-card:hover .lib-del,
+.lib-del:focus-visible,
+.lib-del[data-armed='true'] {
+  opacity: 1;
 }
 
 .lib-empty {
+  grid-column: 1 / -1;
   border: 2px dashed var(--app-border);
   border-radius: calc(var(--app-radius) * 2);
-  padding: clamp(2rem, 8vw, 4rem) 1.5rem;
+  padding: clamp(2rem, 8vw, 4.5rem) 1.5rem;
   text-align: center;
-  font-family: var(--app-font-ui);
 }
 .lib-empty p {
-  margin: 0 0 1rem;
+  margin: 0 auto 1.25rem;
+  max-width: 34rem;
   color: var(--app-label-dim);
   font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+/* Very narrow: one column, and the poster turns back into a thumbnail beside
+   the text rather than a full-width slab. */
+@media (max-width: 430px) {
+  .lib-grid {
+    grid-template-columns: 1fr;
+  }
+  .lib-card {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .lib-cover {
+    width: 72px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--app-border);
+    border-bottom: 0;
+    font-size: 1.25rem;
+  }
+  .lib-del {
+    opacity: 1;
+  }
+}
+
+/* ------------------------------------------------------ split side panels */
+
+.app-panes {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.app-pane {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* A collapsed pane keeps its header — that is what you click to bring it back. */
+.app-pane[data-collapsed='true'] {
+  flex: 0 0 auto;
+}
+
+.app-pane-head {
+  display: flex;
+  height: 26px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-top: 1px solid var(--app-border);
+  padding: 0 0.375rem 0 0.625rem;
+  color: var(--app-label-dim);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.app-pane:first-child .app-pane-head {
+  border-top: 0;
+}
+
+.app-pane-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem;
+}
+
+.app-vsplit {
+  height: 7px;
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: row-resize;
+}
+.app-vsplit:hover,
+.app-vsplit[data-dragging='true'] {
+  background: var(--app-accent-wash);
+}
+.app-vsplit:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: -2px;
+}
+
+/* ----------------------------------------------------------------- saves */
+
+.app-save-form {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.625rem;
+}
+.app-input {
+  min-width: 0;
+  height: var(--app-control-h);
+  flex: 1;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  background: var(--app-chrome-elev);
+  padding: 0 0.5rem;
+  color: var(--app-label);
+  font: inherit;
+  font-size: 0.75rem;
+}
+.app-input:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 1px;
+}
+
+.app-save {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 0.375rem;
+  border: 1px solid var(--app-border);
+  border-left-width: 3px;
+  border-radius: var(--app-radius);
+  background: var(--app-chrome-elev);
+  padding: 0.375rem 0.5rem;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.app-save:hover {
+  border-left-color: var(--app-accent);
+}
+.app-save:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: -2px;
+}
+.app-save[data-armed='true'] {
+  border-left-color: var(--app-accent);
+  background: var(--app-accent-wash);
+}
+.app-save-name {
+  font-size: 0.75rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.app-save-meta {
+  color: var(--app-label-dim);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+.app-save-auto {
+  color: var(--app-accent);
+}
+
+/* ------------------------------------------------------------- focus mode */
+
+/*
+ * Nothing but the story. The titlebar goes with the panes — leaving it behind
+ * was half a focus mode — and the native menu bar is hidden from Rust, since it
+ * is drawn by the window, not the page.
+ */
+[data-focus='true'] .app-titlebar {
+  display: none;
+}
+.app-focus-exit {
+  position: fixed;
+  top: 0.5rem;
+  right: 0.75rem;
+  z-index: 40;
+  opacity: 0.25;
+  transition: opacity 150ms ease;
+}
+.app-focus-exit:hover,
+.app-focus-exit:focus-visible {
+  opacity: 1;
 }
 
 /* ------------------------------------------------------------- responsive */

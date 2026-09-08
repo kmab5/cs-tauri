@@ -53,8 +53,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .id("toggle-sidebar")
         .accelerator("CmdOrCtrl+Backslash")
         .build(app)?;
-    let stats = MenuItemBuilder::new("Toggle Stats")
-        .id("toggle-stats")
+    let panel = MenuItemBuilder::new("Toggle Achievements Panel")
+        .id("toggle-panel")
         .accelerator("CmdOrCtrl+I")
         .build(app)?;
     let zoom_in = MenuItemBuilder::new("Larger Text")
@@ -122,7 +122,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
     let view = SubmenuBuilder::new(app, "View")
         .item(&sidebar)
-        .item(&stats)
+        .item(&panel)
         .item(&focus)
         .separator()
         .item(&zoom_in)
@@ -152,7 +152,15 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 /// Disabled on the library page rather than left enabled and inert: the menu is
 /// where a reader looks to find out what is possible right now, and offering
 /// Restart with no game open is a lie about the state of the app.
-const GAME_ITEMS: &[&str] = &["save", "restore", "restart", "achievements", "toggle-stats", "toggle-focus", "library"];
+const GAME_ITEMS: &[&str] = &[
+    "save",
+    "restore",
+    "restart",
+    "achievements",
+    "toggle-panel",
+    "toggle-focus",
+    "library",
+];
 
 #[tauri::command]
 pub fn set_game_menu_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
@@ -166,5 +174,29 @@ pub fn set_game_menu_enabled(app: AppHandle, enabled: bool) -> Result<(), String
             }
         }
     }
+    Ok(())
+}
+
+/// Hide the menu bar entirely, for focus mode.
+///
+/// The bar belongs to the window, so the front end cannot reach it — and
+/// leaving it in place made focus mode a half measure. macOS draws its menu in
+/// the system bar, which hides itself in fullscreen, so there is nothing to do
+/// there.
+#[tauri::command]
+pub fn set_menu_visible(app: AppHandle, visible: bool) -> Result<(), String> {
+    #[cfg(not(target_os = "macos"))]
+    {
+        use tauri::Manager;
+        if let Some(window) = app.get_webview_window("main") {
+            if visible {
+                window.show_menu().map_err(|e| e.to_string())?;
+            } else {
+                window.hide_menu().map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    let _ = (app, visible);
     Ok(())
 }

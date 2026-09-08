@@ -24,12 +24,9 @@ function useChoiceScript(cs: ChoiceScriptApi) {
 export function Player({
   cs,
   game,
-  statsDocked,
 }: {
   cs: ChoiceScriptApi;
   game: StoredGame;
-  /** The frame is showing the stats channel in a side panel; skip the dialog. */
-  statsDocked?: boolean;
 }) {
   const state = useChoiceScript(cs);
   useAchievementToasts(state);
@@ -64,7 +61,7 @@ export function Player({
         <PendingView pending={state.pending} cs={cs} />
       </motion.main>
 
-      <Overlays cs={cs} state={state} gameId={game.id} suppress={statsDocked ? 'stats' : undefined} />
+      <Overlays cs={cs} state={state} gameId={game.id} />
       <ModalPrompt cs={cs} state={state} />
     </div>
   );

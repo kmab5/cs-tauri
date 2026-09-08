@@ -5,6 +5,98 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 8 — v0.1.8, five items
+
+### The icon is back
+
+Reverted to the session-4 drawing, byte for byte. The "crisper" one traded the
+gradient and the four-node figure for something heavier that read worse at every
+size above 32px. Your call was right.
+
+### The stats screen: no, it is not possible
+
+You asked directly, so here is the direct answer, and it is no.
+
+A stats screen is a ChoiceScript *scene*. It can hold `*stat_chart`, `*if`, and
+in Sordwin a `*choice` the reader answers. The engine runs it by raising
+`bus.statsMode`, and while that flag is up **every** block it emits routes to the
+stats channel (`bus.js:74`). Answering a stats choice needs the flag up.
+Advancing the story needs it down. One flag, two mutually exclusive
+requirements — so a live sheet beside a usable story is not something this engine
+can be asked for, whatever the interface looks like. My snapshot-and-close
+version was working around that and losing; the sheet printing itself into the
+prose was the same constraint showing through.
+
+So the stats screen is a dialog again, and the side panel now holds
+**achievements**, which have no such problem: `state.achievements` is derived
+state rather than a rendered channel, so it updates live and never touches the
+interpreter. Earned and locked lists, points, hidden count, and a progress meter
+using the same `role="meter"` the stat bars use.
+
+The scroll failure in the panel was the flexbox trap again — `.app-inspector`
+and `.app-inspector-body` were missing `min-height: 0`, so the body refused to
+shrink below its content and never scrolled. Third time I have hit that in this
+project; it is fixed on every scroller now.
+
+### The sidebar, split
+
+Two panes with a draggable divider: **This game** on top, **Saves** underneath.
+The ratio is remembered, the divider takes arrow keys as well as a pointer, and
+either pane collapses to just its header — which is why the headers stay when
+collapsed, since that is what you click to bring one back. Dragging the divider
+un-collapses, because a drag is an instruction about sizes.
+
+Saves in the sidebar: a name field and a Save button wired to `cs.save()`, then
+the list — autosaves marked, with the time and line. **Loading takes two
+clicks.** It discards everything since that save, and one stray click is not an
+acceptable price for that in a story measured in hours. The list re-reads as the
+story moves, so the rolling autosave appears in it as it is written.
+
+### The library, again
+
+Cover-led this time. A game is recognised by its art long before its title is
+read, and the covers are the only thing on that screen the author made — so
+they are 3:4 posters, `auto-fill` on a clamped minimum so the shelf reflows
+continuously rather than at three chosen widths. Games without art get their
+initial at the same size, so a mixed shelf still lines up.
+
+The whole card starts the game; a Play button inside a clickable card was two
+targets for one action. Delete moved to a corner overlay that appears on hover
+and still needs two clicks. Under 430px the poster becomes a thumbnail beside
+the text and the grid drops to one column. A filter field appears once there are
+more than five games and not before.
+
+### Focus mode
+
+It now hides the titlebar as well as the panes — leaving it behind was half a
+focus mode — and hides the native menu bar through a new Rust command, since the
+bar belongs to the window and CSS cannot reach it. macOS needs no command there:
+its system menu hides itself in fullscreen.
+
+With the titlebar gone there has to be a way out that does not require knowing
+about Escape, so there is a faint exit button in the corner that comes up to
+full opacity on hover. Escape still works.
+
+### Verified
+
+- `npm run build` — clean, 434 kB
+- `npm run typecheck`, `check-stale`, `test:version`, `test:theme`,
+  `test:register` — all pass
+- `npm run test:webview` — **50 passed, 0 failed**
+- `npm run test:game` — **50 passed, 0 failed** on Choice of Magics
+
+Eight new assertions: both sidebar sections present, the divider, saving offered
+in the sidebar, collapsing keeping the header, achievements docking without a
+dialog, the story surviving beside them, and stats opening as a dialog *and not*
+as a panel — that last one is the regression guard for this session's main
+finding.
+
+`menu.rs` gained `set_menu_visible` and is still uncompiled here. If it fails,
+the front end already tolerates its absence: focus mode would keep the menu bar
+and lose nothing else.
+
+---
+
 ## 2026-09-08 · Session 7 — v0.1.7, nineteen reported problems
 
 Everything on the list is addressed. The root causes are more interesting than

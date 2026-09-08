@@ -94,6 +94,7 @@ pub fn run() {
             library::decompress,
             library::take_bundled,
             menu::set_game_menu_enabled,
+            menu::set_menu_visible,
             store::read_store,
             store::write_store,
         ])

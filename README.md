@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.1.7` reads as **major release · major update · session**. `package.json` is
+`0.1.8` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -44,9 +44,9 @@ disagrees with either.
 Pushing a `v*` tag builds and publishes:
 
 ```bash
-npm version 0.1.8 --no-git-tag-version   # then update src-tauri/Cargo.toml
-git commit -am "release: v0.1.8"
-git tag v0.1.8 && git push --follow-tags
+npm version 0.1.9 --no-git-tag-version   # then update src-tauri/Cargo.toml
+git commit -am "release: v0.1.9"
+git tag v0.1.9 && git push --follow-tags
 ```
 
 `.github/workflows/release.yml` then runs the tests, builds the NSIS installer,
@@ -155,10 +155,10 @@ src/
   features/
     Shell.tsx           the window frame: titlebar, panes, focus mode, resizing
     LibraryPage.tsx     the shelf — the only place a game can be started
-    GamePanel.tsx       the sidebar while a game is open, and the way back
+    GamePanel.tsx       the sidebar while a game is open: details over saves
     AppSettings.tsx     the settings that make sense with no game loaded
     Player.tsx          subscribes to the engine, renders state
-    StatsPanel.tsx      the character sheet, docked beside the story
+    AchievementsPanel.tsx  achievements, docked beside the story
     useAutosave.ts      a rolling three-deep autosave queue
     Blocks.tsx          block rendering, incl. the mandatory legacyNode mount
     Pending.tsx         choices, page breaks, text input
@@ -250,6 +250,22 @@ about the filter rules, which have their own tests in Rust where they belong.
 Everything runs on Windows, macOS and Linux — no shell, no `zip` binary, no
 `/tmp` assumptions. The harness builds its fixture archive in JavaScript and
 ships a small sample game, so it needs no arguments.
+
+## Why the stats screen is a dialog
+
+A stats screen is a ChoiceScript *scene*. It can contain `*stat_chart`, `*if`,
+and — in games like Sordwin — a `*choice` the reader answers. The engine runs it
+by raising `bus.statsMode`, and while that flag is up every block it emits routes
+to the stats channel (`bus.js:74`).
+
+Answering a stats choice needs the flag up. Advancing the story needs it down.
+One flag, two mutually exclusive requirements, so a live character sheet beside
+a usable story is not something the engine can be asked for — an earlier attempt
+at one is why the sheet once printed itself into the middle of the page.
+
+Achievements have no such problem: `state.achievements` is derived state, not a
+rendered channel, so they dock in the side panel and update live without
+touching the interpreter.
 
 ## Saves
 

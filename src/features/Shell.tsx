@@ -11,22 +11,22 @@
  */
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { BarChart3, Bookmark, Maximize2, PanelLeft, Settings2, Trophy } from 'lucide-react';
+import { BarChart3, Bookmark, Maximize2, Minimize2, PanelLeft, Settings2, Trophy } from 'lucide-react';
 
 import type { ChoiceScriptApi } from '@/lib/choicescript';
 import type { StoredGame } from '@/lib/library';
 import { useMenu } from '@/lib/desktop/menu';
-import { setGameMenuEnabled } from '@/lib/desktop/menu';
+import { setGameMenuEnabled, setMenuVisible } from '@/lib/desktop/menu';
 import { Player } from './Player';
 import { GamePanel } from './GamePanel';
 import { LibraryPage } from './LibraryPage';
-import { StatsPanel } from './StatsPanel';
+import { AchievementsPanel } from './AchievementsPanel';
 import { AppSettings } from './AppSettings';
 import { readScroll, saveScroll, useReadingKeys } from './useReadingKeys';
 import { useAutosave } from './useAutosave';
 import { setTheme, setZoom } from '@/lib/theme';
 
-/** Below this the sheet would squeeze the reading measure, so it stays a dialog. */
+/** Below this the side panel would squeeze the reading measure, so it is hidden. */
 const WIDE = '(min-width: 1100px)';
 const SIDEBAR = { min: 180, max: 460, key: 'cs-sidebar-w' };
 
@@ -102,13 +102,14 @@ function ReadingKeys({ cs, gameId }: { cs: ChoiceScriptApi; gameId: string }) {
 function GameControls({
   cs,
   wide,
-  statsDocked,
-  onToggleStats,
+  panelOpen,
+  onTogglePanel,
 }: {
   cs: ChoiceScriptApi;
+  /** Wide enough to dock the achievements panel beside the story. */
   wide: boolean;
-  statsDocked: boolean;
-  onToggleStats: () => void;
+  panelOpen: boolean;
+  onTogglePanel: () => void;
 }) {
   const state = useSyncExternalStore(cs.subscribe, cs.getState, cs.getState);
   const earned = state.achievements?.earned.length ?? 0;
@@ -132,13 +133,9 @@ function GameControls({
 
   return (
     <>
-      {/* One control, two hosts: dock the sheet if there is room for it,
-          otherwise put it over the story as a dialog. */}
-      <button
-        className="app-btn"
-        aria-pressed={statsDocked}
-        onClick={wide ? onToggleStats : () => cs.openStats()}
-      >
+      {/* Always a dialog. The stats screen is a scene the reader may have to
+          answer, and the engine cannot run one beside a live story. */}
+      <button className="app-btn" onClick={() => cs.openStats()}>
         <BarChart3 className="size-3.5" aria-hidden />
         <span className="app-btn-label">Stats</span>
       </button>
@@ -146,7 +143,12 @@ function GameControls({
         <Bookmark className="size-3.5" aria-hidden />
         <span className="app-btn-label">Saves</span>
       </button>
-      <button className="app-btn" onClick={() => cs.openAchievements()}>
+      {/* Achievements are plain state, so they can dock. */}
+      <button
+        className="app-btn"
+        aria-pressed={panelOpen}
+        onClick={wide ? onTogglePanel : () => cs.openAchievements()}
+      >
         <Trophy className="size-3.5" aria-hidden />
         <span className="app-btn-label">Achievements</span>
         {total > 0 && (
@@ -245,6 +247,9 @@ export function Shell({
       .catch(() => {
         /* a window manager that refuses still gets the panes hidden */
       });
+    /* The menu bar is drawn by the window, not the page, so hiding it has to
+       happen in Rust. On macOS the system menu hides itself in fullscreen. */
+    void setMenuVisible(!focus);
   }, [focus]);
 
   /* Game-only menu items are disabled on the library page rather than left
@@ -255,8 +260,8 @@ export function Shell({
 
   useMenu({
     'toggle-sidebar': () => setSidebar((on) => !on),
-    'toggle-stats': () =>
-      game && cs ? (wide ? setInspector((on) => !on) : cs.openStats()) : undefined,
+    'toggle-panel': () =>
+      game && cs ? (wide ? setInspector((on) => !on) : cs.openAchievements()) : undefined,
     'toggle-focus': () => game && setFocus((on) => !on),
     library: () => (game ? onExit() : undefined),
     /* On the library page Settings means the app's settings, not a running
@@ -313,8 +318,8 @@ export function Shell({
                 <GameControls
                   cs={cs}
                   wide={wide && !focus}
-                  statsDocked={docked}
-                  onToggleStats={() => setInspector((on) => !on)}
+                  panelOpen={docked}
+                  onTogglePanel={() => setInspector((on) => !on)}
                 />
               </>
             ) : (
@@ -326,14 +331,11 @@ export function Shell({
           </div>
         </header>
 
-        {/* data-inert is set by StatsPanel while the sheet is open: the story
-            stays readable but cannot take input, because the engine would route
-            the answer into the stats channel. */}
         <div className="app-reading">
           {game && cs ? (
             <div className="app-measure">
               <ReadingKeys cs={cs} gameId={game.id} />
-              <Player cs={cs} game={game} statsDocked={docked} />
+              <Player cs={cs} game={game} />
             </div>
           ) : (
             <LibraryPage onPlay={onPlay} />
@@ -341,8 +343,19 @@ export function Shell({
         </div>
       </div>
 
-      {docked && cs && game && (
-        <StatsPanel cs={cs} gameId={game.id} onClose={() => setInspector(false)} />
+      {docked && cs && <AchievementsPanel cs={cs} onClose={() => setInspector(false)} />}
+
+      {/* Focus mode hides the titlebar, so this is the way out that does not
+          require knowing about Escape. Faint until it is wanted. */}
+      {focus && (
+        <button
+          className="app-btn app-focus-exit"
+          onClick={() => setFocus(false)}
+          aria-label="Leave focus mode"
+          title="Leave focus mode (Escape)"
+        >
+          <Minimize2 className="size-4" aria-hidden />
+        </button>
       )}
 
       {appSettings && <AppSettings onClose={() => setAppSettings(false)} />}

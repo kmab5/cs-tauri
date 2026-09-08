@@ -292,6 +292,7 @@ function makeBridge(dataDir, archivePath) {
     /* Focus mode and the menu-enable command both reach Rust. */
     'plugin:window|set_fullscreen': () => null,
     set_game_menu_enabled: () => null,
+    set_menu_visible: () => null,
     'plugin:opener|open_url': ({ url }) => {
       calls.push('open_url:' + url);
       return null;
@@ -488,11 +489,10 @@ server.listen(PORT, async () => {
   );
   ok('it appears on the shelf', /./.test(d.querySelector('.lib-card-title')?.textContent || ''),
     d.querySelector('.lib-card-title')?.textContent);
+  ok('the shelf card is the play target', !!d.querySelector('button.lib-card'));
 
   console.log('\nit plays');
-  const play = Array.prototype.slice
-    .call(d.querySelectorAll('.lib-card button'))
-    .find((b) => /^Play/.test(b.textContent.trim()));
+  const play = d.querySelector('button.lib-card');
   if (play) play.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   await new Promise((r) => setTimeout(r, 3000));
 
@@ -533,32 +533,51 @@ server.listen(PORT, async () => {
     ok('the story advances', !!after && after.textContent.trim().length > 0);
   }
 
-  console.log('\nthe sheet docks beside the story');
+  console.log('\nthe sidebar splits, and saves are in it');
+  ok('the panel has both sections',
+    d.querySelectorAll('aside[aria-label="This game"] .app-pane').length === 2);
+  ok('the sections have a divider to drag', !!d.querySelector('.app-vsplit'));
+  ok('saving is offered in the sidebar', !!d.querySelector('#sidebar-save-name'));
+  const collapse = d.querySelectorAll('.app-pane-head button');
+  ok('each section can be collapsed', collapse.length === 2);
+  if (collapse.length === 2) {
+    collapse[0].dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 250));
+    ok('collapsing hides the body but keeps the header',
+      d.querySelectorAll('aside[aria-label="This game"] .app-pane-body').length === 1 &&
+        d.querySelectorAll('.app-pane-head').length === 2);
+    collapse[0].dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 250));
+  }
+
+  console.log('\nachievements dock, stats do not');
+  const achBtn = Array.prototype.slice
+    .call(d.querySelectorAll('.app-titlebar button'))
+    .find((b) => /Achievements/.test(b.textContent));
+  ok('the achievements control is in the titlebar', !!achBtn);
+  if (achBtn) {
+    achBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 700));
+    ok('achievements dock as a panel',
+      !!d.querySelector('aside[aria-label=Achievements]') && !d.querySelector('[role=dialog]'));
+    ok('the story is still on screen beside them', !!d.querySelector('.prose-cs'));
+    achBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 300));
+    ok('and close again', !d.querySelector('aside[aria-label=Achievements]'));
+  }
+  /* A stats screen can contain a *choice, which needs the engine's stats mode
+     held up while the reader answers — so it cannot share the window with a
+     live story. It is a dialog, deliberately. */
   const statsBtn = Array.prototype.slice
     .call(d.querySelectorAll('.app-titlebar button'))
     .find((b) => /Stats/.test(b.textContent));
-  ok('the stats control is in the titlebar', !!statsBtn);
   if (statsBtn) {
     statsBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 900));
-    ok('it docks as a panel, not a dialog',
-      !!d.querySelector('aside[aria-label=Stats]') && !d.querySelector('[role=dialog]'));
-    ok('the panel shows the stats scene',
-      (d.querySelector('.app-inspector-body')?.textContent || '').trim().length > 0);
-    ok('the story is still on screen beside it', !!d.querySelector('.prose-cs'));
-    /* The engine routes every block to the stats channel while its stats mode
-       is up, so the story must not be able to take input meanwhile — that is
-       what put the character sheet in the middle of the page before. */
-    ok('the story is inert while the sheet is open',
-      d.querySelector('.app-reading')?.getAttribute('data-inert') === 'true');
-    ok('the sheet did not leak into the story',
-      !/\bStats\b/.test(d.querySelector('.prose-cs')?.textContent || '') ||
-        true);
-    statsBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 400));
-    ok('and closes again', !d.querySelector('aside[aria-label=Stats]'));
-    ok('the story takes input again',
-      d.querySelector('.app-reading')?.getAttribute('data-inert') !== 'true');
+    await new Promise((r) => setTimeout(r, 700));
+    ok('stats open as a dialog, not a panel',
+      !!d.querySelector('[role=dialog]') && !d.querySelector('aside[aria-label=Stats]'));
+    win.ChoiceScript.closeOverlay();
+    await new Promise((r) => setTimeout(r, 300));
   }
 
   console.log('\nthe chrome follows the theme');

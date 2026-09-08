@@ -18,7 +18,7 @@ export type MenuId =
   | 'achievements'
   | 'settings'
   | 'toggle-sidebar'
-  | 'toggle-stats'
+  | 'toggle-panel'
   | 'toggle-focus'
   | 'zoom-in'
   | 'zoom-out'
@@ -47,7 +47,7 @@ const KEYS: Record<string, MenuId> = {
   'mod+shift+a': 'achievements',
   'mod+,': 'settings',
   'mod+\\': 'toggle-sidebar',
-  'mod+i': 'toggle-stats',
+  'mod+i': 'toggle-panel',
   'mod+shift+f': 'toggle-focus',
   'mod+=': 'zoom-in',
   'mod++': 'zoom-in',
@@ -98,6 +98,20 @@ function start() {
  * could not work; the menu is the one place a reader looks to find out what is
  * possible right now.
  */
+/**
+ * Hide the whole menu bar for focus mode.
+ *
+ * It is part of the window rather than the page, so CSS cannot reach it. On
+ * macOS the system menu bar hides itself in fullscreen and this is a no-op.
+ */
+export async function setMenuVisible(visible: boolean): Promise<void> {
+  try {
+    await invoke('set_menu_visible', { visible });
+  } catch {
+    /* nothing to do: the menu simply stays where it is */
+  }
+}
+
 export async function setGameMenuEnabled(enabled: boolean): Promise<void> {
   try {
     await invoke('set_game_menu_enabled', { enabled });
