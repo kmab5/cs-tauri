@@ -8,12 +8,9 @@
  *   --app-*  the chrome. Titlebar, sidebar, inspector, menus. Follows the
  *            operating system's light or dark appearance, and nothing else.
  *
- * On the web that distinction does not exist, because the page *is* the
- * application: index.css maps every token onto --cs-* and choosing a sepia
- * theme repaints everything, correctly. In a window it is wrong. The frame
- * belongs to the OS and should not turn sepia because the reader likes sepia
- * for prose. So everything here is scoped to [data-shell="desktop"], and the
- * static site is untouched.
+ * The frame belongs to the operating system and should not turn sepia because
+ * the reader likes sepia for prose. Keeping the two apart is the whole reason
+ * this file exists separately from index.css.
  *
  * scripts/check-register.mjs fails the build if the two registers cross.
  */
@@ -85,22 +82,24 @@
  * over a desktop, so the shell tightens to 28px — and gives it straight back
  * on a touchscreen, which a Windows laptop may well have.
  */
-html[data-shell='desktop'] {
+/* Unlayered, so it beats Tailwind's @theme declaration whatever the
+   specificity: layered styles always lose to unlayered ones. */
+:root {
   --spacing-touch: 28px;
 }
 @media (pointer: coarse) {
-  html[data-shell='desktop'] {
+  :root {
     --spacing-touch: 44px;
   }
 }
 
-[data-shell='desktop'] {
-  /* Vibrancy needs the window to show through, and body paints the reading
-     theme's paper. So on the desktop the page background moves onto the
-     reading column, which is the only surface that should carry it anyway. */
+html {
+  /* Vibrancy needs the window to show through, so nothing paints the root.
+     The reading theme's paper lives on .app-main instead, which is the only
+     surface that should have carried it in the first place. */
   background: transparent;
 }
-[data-shell='desktop'] body {
+body {
   background: transparent;
   overscroll-behavior: none;
 }
@@ -108,8 +107,8 @@ html[data-shell='desktop'] {
 /* Where the platform gives us a translucent window, the chrome uses it. Every
    surface below still has an opaque colour underneath, because Linux has no
    equivalent and older Windows does not get Mica. */
-[data-shell='desktop'][data-platform='macos'],
-[data-shell='desktop'][data-platform='windows'] {
+[data-platform='macos'],
+[data-platform='windows'] {
   --app-chrome: color-mix(in srgb, var(--app-chrome-solid) 72%, transparent);
 }
 
@@ -403,20 +402,20 @@ html[data-shell='desktop'] {
 
 /* --------------------------------------------------------------- scrollbars */
 
-[data-shell='desktop'] ::-webkit-scrollbar {
+::-webkit-scrollbar {
   width: 11px;
   height: 11px;
 }
-[data-shell='desktop'] ::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: transparent;
 }
-[data-shell='desktop'] ::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 999px;
   background-clip: content-box;
   background-color: var(--app-border-strong);
 }
-[data-shell='desktop'] ::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover {
   background-color: var(--app-label-dim);
 }
 

@@ -25,8 +25,11 @@ import { readScroll, saveScroll, useReadingKeys } from './useReadingKeys';
 const WIDE = '(min-width: 1100px)';
 
 function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(() => matchMedia(query).matches);
+  const [matches, setMatches] = useState(
+    () => typeof matchMedia === 'function' && matchMedia(query).matches,
+  );
   useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
     const mq = matchMedia(query);
     const update = () => setMatches(mq.matches);
     update();
@@ -46,10 +49,13 @@ const ZOOM_RANGE = [0.7, 2] as const;
  */
 function GameControls({
   cs,
+  wide,
   statsDocked,
   onToggleStats,
 }: {
   cs: ChoiceScriptApi;
+  /** Wide enough to dock the sheet beside the story rather than over it. */
+  wide: boolean;
   statsDocked: boolean;
   onToggleStats: () => void;
 }) {
@@ -75,11 +81,12 @@ function GameControls({
 
   return (
     <>
+      {/* One control, two hosts: dock the sheet if there is room for it,
+          otherwise put it over the story as a dialog. */}
       <button
         className="app-btn"
         aria-pressed={statsDocked}
-        onClick={statsDocked ? onToggleStats : () => cs.openStats()}
-        onAuxClick={onToggleStats}
+        onClick={wide ? onToggleStats : () => cs.openStats()}
       >
         <BarChart3 className="size-3.5" aria-hidden /> Stats
       </button>
@@ -222,6 +229,7 @@ export function Shell({
             {cs && game && (
               <GameControls
                 cs={cs}
+                wide={wide && !focus}
                 statsDocked={docked}
                 onToggleStats={() => setInspector((on) => !on)}
               />
@@ -244,7 +252,7 @@ export function Shell({
             {game && cs ? (
               <>
                 <ReadingKeys cs={cs} gameId={game.id} />
-                <Player cs={cs} game={game} onExit={onExit} variant="shell" />
+                <Player cs={cs} game={game} />
               </>
             ) : (
               <Welcome />

@@ -5,6 +5,239 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 7 — The same request, and the trap in applying it
+
+The instructions arrived again, unchanged. I checked the remote before doing
+anything: `kmab5/cs-tauri` is still at `c79b282`, `package.json` still says
+0.1.5, there is no `.github/`, and `Library.tsx`, `Toolbar.tsx` and
+`test-bundled-game.mjs` are all still there. Nothing had been applied, so
+session 6's work already answers all five items and none of it needed redoing.
+
+So I spent the session on the thing that would have gone wrong next.
+
+### Unzipping over your checkout breaks the build
+
+Extracting an archive adds and overwrites files. It never deletes them. Session
+6 *removed* seven, and every one of them still type-checks against the old
+contract, so they fail the build rather than sitting there harmlessly.
+
+I simulated it — cloned your repo at `c79b282`, extracted the zip over it, ran
+`npm run build`:
+
+```
+src/features/Library.tsx(6,55): error TS2305: Module '"@/lib/library"' has no exported member 'quota'.
+src/lib/db.web.ts(131,17): error TS2339: Property 'payload' does not exist on type 'Ingested'.
+src/lib/db.web.ts(132,32): error TS2339: Property 'payload' does not exist on type 'Ingested'.
+src/lib/db.web.ts(132,57): error TS2339: Property 'payload' does not exist on type 'Ingested'.
+```
+
+Four errors, all from orphans, none from the new code.
+
+### The fix was already in your repo
+
+`scripts/check-stale.mjs` exists for precisely this, and its header says so:
+*"Updating by unzipping over an existing checkout leaves behind files that no
+longer exist upstream."* It already lists the vaul sheet, the old HUD,
+`lib/api.ts`, the Tailwind v3 configs. I simply failed to add session 6's
+removals to it — the guard was right there and I walked past it.
+
+Seven entries added, each with the reason:
+
+| Orphan | Why it went |
+| --- | --- |
+| `e2e-test.cjs` | the static-site harness, replaced by `scripts/test-webview.cjs` |
+| `scripts/test-bundled-game.mjs` | folded into `scripts/test-webview.cjs` |
+| `src/features/Library.tsx` | the library *page*, replaced by the sidebar |
+| `src/features/Toolbar.tsx` | the in-page sticky title bar, replaced by the window titlebar |
+| `src/lib/db.web.ts` | the IndexedDB backend |
+| `src/lib/db.tauri.ts` | became `src/lib/db.ts` — one backend, not two |
+| `src/lib/archive.ts` | browser zip reading; extraction is `src-tauri/src/archive.rs` |
+
+The guard runs first in both `dev` and `build`, so instead of four type errors
+about `payload` you now get the file list, the reason for each, and the exact
+`rm -f` line to paste.
+
+### Verified the whole path, not just the guard
+
+On a clone of `c79b282` with the zip extracted over it:
+
+1. `npm run build` → guard fails, lists all seven, prints the command
+2. paste the command
+3. `npm run build` → clean, 422 kB
+4. `test:version`, `test:theme`, `test:register` → pass
+5. `test:webview` → **40 passed, 0 failed**
+
+That is the sequence you will actually go through, run end to end rather than
+reasoned about.
+
+### To apply
+
+```bash
+cd /d/Code/cs-tauri
+# extract the zip over the checkout, then:
+npm run build          # tells you what to delete
+rm -f e2e-test.cjs scripts/test-bundled-game.mjs src/features/Library.tsx \
+      src/features/Toolbar.tsx src/lib/db.web.ts src/lib/db.tauri.ts src/lib/archive.ts
+npm install            # the dependency set changed
+npm test
+```
+
+`git status` after that should show the seven as deleted, `.github/` as new, and
+no orphans. Then tag `v0.1.6`.
+
+---
+
+## 2026-09-08 · Session 6 — Desktop only, v0.1.6, CI, and the reported failures
+
+Pulled `kmab5/cs-tauri` at `c79b282` and worked from there.
+
+### The web build is gone
+
+Not "web elements hidden behind a flag" — deleted. The React app is now the
+contents of the window and nothing else.
+
+**Removed:** `src/lib/db.web.ts` (IndexedDB), `src/lib/archive.ts` (browser zip
+reading), `src/features/Library.tsx` (the library *page*), `src/features/Toolbar.tsx`
+(the in-page sticky title bar), `e2e-test.cjs` and `scripts/test-bundled-game.mjs`,
+the `fake-indexeddb` dependency, `isDesktop()` and every branch behind it, the
+`preview` script, and `Player`'s `variant` prop.
+
+**Collapsed:** `db.tauri.ts` became `db.ts`; the dispatcher and the `Backend`
+interface went with it, since there is one backend now. `library.ts` lost its
+browser ingest and the filter rules that went with it — those live in
+`archive.rs`, which is where the extraction happens and where the tests are.
+`releaseAssets()` no longer revokes anything: asset URLs are paths through the
+asset protocol, not object URLs.
+
+**Fixed a latent bug while doing it.** `chrome.css` was scoped to
+`[data-shell="desktop"]` to protect the web build, and inside that it set
+`body { background: transparent }` for vibrancy. But `index.css` declares
+`body { background-color: var(--cs-paper) }` *after* the import, so it always
+won — the window was opaque and no vibrancy could ever have shown. The page
+background now lives on `.app-main`, which is the only surface that should have
+carried it. The scoping attribute is gone entirely; `:root` in `chrome.css` is
+unlayered, so it beats Tailwind's `@theme` whatever the specificity.
+
+**Also fixed:** the docked stats panel could only be opened by *middle-clicking*
+the Stats button — `onAuxClick`, which is no discoverable affordance at all.
+The button now toggles the dock when the window is wide and opens the dialog
+when it is not, which is what the menu item already did.
+
+### Your test failures
+
+**`npm run test:rust` — the `AboutMetadata` warning.** The import was
+unconditional while its only use sits behind `#[cfg(target_os = "macos")]`, so
+it warned on every Windows and Linux build. Moved under the same cfg.
+
+**`npm run test:game` — jsdom 404.** The harness served `dist/`, and `dist/`
+had never been built. Two changes: the harness now checks for
+`dist/index.html` and says *"Run `npm run build` first"* instead of dying inside
+jsdom, and `npm test` builds before the checks that read it. The theme guard had
+the same latent crash — it did `readdirSync('dist/assets')` — and now fails the
+same clear way.
+
+**`npm run tauri:dev` — `EBUSY … choicescript_lib.dll`.** Vite was watching
+`src-tauri/target`, which is where cargo writes that DLL while the app runs.
+The rebuild touched it, chokidar threw, and the frontend process took
+`tauri dev` down with it. `server.watch.ignored: ['**/src-tauri/**']` fixes it,
+and it is very likely also the cause of the `incremental compilation …
+Access is denied` note just above it — the watcher holding a handle open.
+
+**A break you had not hit yet.** `npm install` from a clean checkout *fails*:
+`@vitejs/plugin-react@4` declares no peer range for Vite 8. Upgraded to v6,
+which is oxc-based — that also removed the two deprecation warnings your dev
+start was printing (`esbuild` option, `optimizeDeps.rollupOptions`) and the
+`__dirname` warning went with the switch to `import.meta.url`.
+
+`vite.config.ts` also picked up the rest of the documented Tauri setup:
+`strictPort` (Tauri waits on 5173 specifically), `clearScreen: false` so Rust
+output survives, `envPrefix` for `TAURI_ENV_*`, and a build target of
+chrome105/safari13 — only two engines ever run this, so there is no reason to
+ship output for browsers nobody will use.
+
+### The harness, rewritten
+
+The old one existed to prove the app was a static site. That is no longer a
+property worth having, so `scripts/test-webview.cjs` replaces it: `dist/` is
+exactly what the webview loads, and the only thing missing under Node is the
+IPC bridge — so the bridge is mocked over a real temp directory and the app is
+driven through it.
+
+**40 passed, 0 failed** on the sample game and again on Choice of Magics. It
+now asserts things the old harness structurally could not:
+
+- the game lands on disk, with a manifest, and scenes readable as text
+- title, scene list and achievements were parsed out of `startup.txt`
+- the stats sheet **docks** beside the story rather than over it, captures the
+  scene, and closes again
+- switching window appearance does not move `--cs-paper`; switching reading
+  theme does not move `--app-chrome-solid` — the two registers, tested
+  behaviourally rather than by grep
+- the engine's save store reached disk, namespaced `CS-<id>`
+
+Three jsdom gaps are polyfilled in the harness, not worked around in the app:
+`matchMedia` (absent entirely — reporting the wide breakpoint as matching is
+what lets the docked panel be exercised at all), `Element.prototype.scrollTo`
+(jsdom stubs the window method but never defines the element one), and
+`__TAURI_EVENT_PLUGIN_INTERNALS__`, which `@tauri-apps/api` reaches for without
+a guard when unlistening.
+
+### Versioning
+
+**0.1.6** — major release · major update · session. Six sessions, so six.
+
+`package.json` is the single source of truth. I *removed* the `version` key from
+`tauri.conf.json`: Tauri falls back to `package.json`, so the installer, the
+About box and the release label now agree by construction rather than by
+discipline. `Cargo.toml` has to be written separately (Cargo cannot read
+`package.json`) and was still on `1.0.0` in one place and `0.1.5` in another;
+both are 0.1.6 now, with `Cargo.lock` updated to match.
+
+`scripts/check-version.mjs` fails if the three disagree, and with a tag argument
+fails if the tag disagrees too.
+
+### CI
+
+**`.github/workflows/release.yml`** — on `v*` tags only. Checks the tag against
+`package.json` *before* spending five minutes compiling, then builds NSIS, MSI
+and a portable zip and publishes them to a GitHub release with generated notes.
+A tag containing `-` is marked prerelease.
+
+NSIS and MSI are both there because they are not interchangeable: MSI is what
+managed deployment can install, NSIS is what works without administrator
+rights. The portable zip is the bare executable plus a `games/` folder beside
+it, because that is where Tauri resolves resources on Windows.
+
+The portable step **globs** for the executable rather than naming it: Tauri v2
+derives the binary name from `productName`, not the crate name, so hardcoding
+either is a guess that breaks the day the other is true.
+
+**`.github/workflows/ci.yml`** — on pushes and PRs, Windows and Ubuntu.
+`cargo test` is a gate; clippy reports without failing, and `cargo fmt --check`
+is deliberately **not** there: this tree has never been through rustfmt and
+would fail on arrival for no useful reason. Run `npm run fmt:rust` once, then
+promote both.
+
+### Verified here
+
+- `npm install` from a clean checkout — succeeds now, 131 packages
+- `npm run build` — clean, 422 kB (down 23 kB with the web code gone)
+- `npm run typecheck` — clean
+- `npm run test:version` · `test:theme` · `test:register` — all pass
+- `npm run test:webview` — 40 passed, 0 failed
+- `npm run test:game` — 40 passed, 0 failed on Choice of Magics
+- Both workflow files parse as YAML
+
+Still no Rust toolchain here, so `menu.rs` is edited but uncompiled — though
+your run confirms everything else in `src-tauri/` builds and 13 tests pass.
+
+### Next
+
+Tag `v0.1.6` and watch the release job. If the portable step surprises you, it
+prints the binary name it picked before copying.
+
+---
+
 ## 2026-09-08 · Session 5 — Verification against the real game, and the last loose end
 
 All nine phases were implemented last session, so this one went after the two things still worth

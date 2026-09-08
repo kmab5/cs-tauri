@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is the release target; Ubuntu catches the things that only
+        # break on WebKitGTK and on a case-sensitive filesystem.
+        os: [windows-latest, ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux build dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - run: npm ci
+
+      - name: Versions agree
+        run: node scripts/check-version.mjs
+
+      # The build has to come first: the theme guard and the webview harness
+      # both read dist/.
+      - name: Build the window contents
+        run: npm run build
+
+      - name: Theme tokens resolve
+        run: npm run test:theme
+
+      - name: The two registers stay apart
+        run: npm run test:register
+
+      - name: The window works against a mocked bridge
+        run: npm run test:webview
+
+      # cargo test is the gate. clippy reports without failing the run, and
+      # `cargo fmt --check` is deliberately absent: this tree has never been
+      # through rustfmt, so it would fail on arrival for no useful reason. Run
+      # `npm run fmt:rust` once, then add both as gates.
+      - name: Rust lints
+        continue-on-error: true
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml

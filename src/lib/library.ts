@@ -1,90 +1,23 @@
 /**
- * The game library, entirely client-side.
+ * The game library.
  *
- * Ingest an archive, parse the metadata the engine needs, store it through
- * whichever backend is active, and hand the engine a preloaded scene cache so
- * it never makes a network request.
+ * Rust unpacks an archive and reports what it found; this module reads the
+ * ChoiceScript out of it — the scene list, the achievements, the title — writes
+ * the manifest, and hands the engine a preloaded scene cache.
  *
- * That last part is what removes the server: `scene.js` consults a global
- * `allScenes` before any fetch (the mechanism compiled single-file games use),
- * so building that cache in the browser means there is nothing left to serve
- * but static files.
+ * That last part is what keeps the engine off the network entirely: `scene.js`
+ * consults a global `allScenes` before any fetch (the mechanism compiled
+ * single-file games use), so filling that cache from disk means the interpreter
+ * never asks for a URL.
  */
 import type { AchievementTuple, ChoiceScriptApi } from './choicescript';
-import { extract, type ArchiveEntry } from './archive';
 import * as db from './db';
-import * as desktopDb from './db.tauri';
-import { isDesktop } from './desktop';
 import type { Ingested, StoredGame } from './db.types';
 
 export type { StoredGame };
 
-/* Published games ship a complete copy of the OLD runtime. Keeping any of it
- * would let a game shadow the engine we load. */
-const RUNTIME_FILES = new Set([
-  'index.html', 'mygame.js', 'version.js', 'scene.js', 'ui.js', 'util.js',
-  'persist.js', 'navigator.js', 'style.css', 'alertify.js', 'alertify.min.js',
-  'alertify.css', 'fastclick.js', 'credits.html', 'sandbox.html',
-  'cache.php', 'redirect.php',
-]);
-
-/* Never stored, even if the archive contains one. Published game zips have
- * been observed shipping App Store signing keys. */
-const SECRET_EXT = new Set(['.pem', '.key', '.p12', '.keystore', '.mobileprovision', '.jks']);
-
-const ASSET_EXT = new Set([
-  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif', '.bmp', '.ico',
-  '.mp3', '.ogg', '.wav', '.m4a', '.woff', '.woff2', '.ttf', '.otf',
-]);
-
-const MIME: Record<string, string> = {
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
-  '.avif': 'image/avif', '.bmp': 'image/bmp', '.ico': 'image/x-icon',
-  '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav',
-  '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf',
-};
-
-const extname = (p: string) => {
-  const m = /\.[a-z0-9]+$/i.exec(p);
-  return m ? m[0].toLowerCase() : '';
-};
 const basename = (p: string) => p.split('/').pop() ?? p;
 
-/** Reject anything that would escape the game's own namespace. */
-function safeRelative(p: string): string | null {
-  const parts = p.replace(/\\/g, '/').split('/');
-  if (parts.includes('..') || p.startsWith('/')) return null;
-  return parts.filter((s) => s && s !== '.').join('/');
-}
-
-/**
- * Authors nest their game differently: `scenes/`, `mygame/scenes/`, or
- * `TheGame/mygame/scenes/`. Find the prefix whose scenes folder holds a
- * startup.txt.
- */
-function findSceneRoot(entries: ArchiveEntry[]): string | null {
-  const candidates = new Map<string, Set<string>>();
-  for (const e of entries) {
-    const p = safeRelative(e.path);
-    if (!p) continue;
-    const m = /^(.*?)scenes\/([^/]+\.txt)$/i.exec(p);
-    if (!m) continue;
-    if (!candidates.has(m[1])) candidates.set(m[1], new Set());
-    candidates.get(m[1])!.add(m[2].toLowerCase());
-  }
-  for (const [prefix, files] of candidates) {
-    if (files.has('startup.txt')) return prefix;
-  }
-  return null;
-}
-
-/**
- * Everything declared in startup.txt is invisible to a restored save, which
- * jumps straight into a later scene. Without the scene list the first *finish
- * finds no next scene and ends the game; without achievements *achieve throws.
- * So they are parsed once, here, and handed to ChoiceScript.start().
- */
 function parseSceneList(startup: string): string[] {
   const lines = startup.split(/\r?\n/);
   const start = lines.findIndex((l) => /^\s*\*scene_list\s*$/i.test(l));
@@ -140,97 +73,11 @@ function parseAchievements(startup: string): AchievementTuple[] {
 }
 
 /**
- * Unpack an archive in the browser.
- *
- * The desktop build does this in Rust instead — see db.tauri.ingest — because
- * the files have to land on disk anyway and the archive would otherwise cross
- * the IPC boundary twice.
- */
-async function ingestWeb(file: File): Promise<Ingested> {
-  let entries: ArchiveEntry[];
-  try {
-    entries = await extract(file);
-  } catch (e) {
-    throw new Error(`Could not read the archive: ${(e as Error).message}`);
-  }
-  if (!entries.length) throw new Error('The archive is empty.');
-
-  const root = findSceneRoot(entries);
-  if (root === null) {
-    throw new Error(
-      'No ChoiceScript game found. The archive must contain a "scenes" folder with a startup.txt inside it.',
-    );
-  }
-
-  const id = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-  const decoder = new TextDecoder();
-  const scenes: Record<string, string> = {};
-  const assets: Record<string, Blob> = {};
-  const skipped: string[] = [];
-  let startup = '';
-  let bytes = 0;
-
-  for (const entry of entries) {
-    const rel = safeRelative(entry.path);
-    if (!rel) continue;
-
-    const base = basename(rel);
-    if (SECRET_EXT.has(extname(base))) {
-      skipped.push(`${base} (credential, not stored)`);
-      continue;
-    }
-    if (!rel.startsWith(root)) continue;
-
-    const inner = rel.slice(root.length);
-    if (!inner || base.startsWith('.') || inner.includes('__MACOSX')) continue;
-
-    const sceneMatch = /^scenes\/([^/]+)\.txt$/i.exec(inner);
-    if (sceneMatch) {
-      const text = decoder.decode(entry.data);
-      scenes[sceneMatch[1]] = text;
-      bytes += entry.data.byteLength;
-      if (sceneMatch[1].toLowerCase() === 'startup') startup = text;
-      continue;
-    }
-    if (inner.includes('/scenes/')) continue;
-
-    if (RUNTIME_FILES.has(base.toLowerCase())) {
-      skipped.push(base);
-      continue;
-    }
-
-    const ext = extname(base);
-    if (ASSET_EXT.has(ext)) {
-      assets[inner] = new Blob([entry.data as BlobPart], {
-        type: MIME[ext] ?? 'application/octet-stream',
-      });
-      bytes += entry.data.byteLength;
-    }
-  }
-
-  if (!Object.keys(scenes).length) {
-    throw new Error('No scene files were found in the archive.');
-  }
-
-  return {
-    id,
-    scenes: Object.keys(scenes).sort(),
-    assets: Object.keys(assets).sort(),
-    skipped,
-    startup,
-    bytes,
-    source: file.name,
-    payload: { scenes, assets },
-  };
-}
-
-/**
  * The ChoiceScript half of an import, shared by every path in.
  *
- * Whether the files were unpacked by the browser or by Rust, startup.txt still
- * has to be read for the scene list and the achievements: everything declared
- * there is invisible to a restored save, which jumps straight into a later
- * scene.
+ * startup.txt has to be read for the scene list and the achievements:
+ * everything declared there is invisible to a restored save, which jumps
+ * straight into a later scene.
  */
 function buildManifest(ingested: Ingested): StoredGame {
   const { startup } = ingested;
@@ -251,21 +98,18 @@ function buildManifest(ingested: Ingested): StoredGame {
 
 async function record(ingested: Ingested): Promise<StoredGame> {
   const game = buildManifest(ingested);
-  await db.commit(game, ingested);
-  /* ask to keep it: this is what defeats Safari's seven-day eviction once the
-   * app is installed to the home screen. A no-op on the desktop. */
-  void db.requestPersistence();
+  await db.commit(game);
   return game;
 }
 
+/** An archive the player dropped or picked. */
 export async function importGame(file: File): Promise<StoredGame> {
-  return record(isDesktop() ? await desktopDb.ingest(file) : await ingestWeb(file));
+  return record(await db.ingest(file));
 }
 
 /** A .cszip the operating system handed us, by association or by drag to dock. */
 export async function importGamePath(path: string): Promise<StoredGame> {
-  if (!isDesktop()) throw new Error('importing by path needs the desktop app');
-  return record(await desktopDb.ingestPath(path));
+  return record(await db.ingestPath(path));
 }
 
 /**
@@ -274,9 +118,8 @@ export async function importGamePath(path: string): Promise<StoredGame> {
  * parsing startup.txt is this side's job.
  */
 export async function importBundled(): Promise<StoredGame[]> {
-  if (!isDesktop()) return [];
   const games: StoredGame[] = [];
-  for (const ingested of await desktopDb.takeBundled()) {
+  for (const ingested of await db.takeBundled()) {
     games.push(await record(ingested));
   }
   return games;
@@ -284,12 +127,12 @@ export async function importBundled(): Promise<StoredGame[]> {
 
 /** Paths delivered before the front end was listening for them. */
 export async function pendingArchives(): Promise<string[]> {
-  return isDesktop() ? desktopDb.takePendingArchives() : [];
+  return db.takePendingArchives();
 }
 
 export const listGames = db.listGames;
 export const deleteGame = db.deleteGame;
-export const quota = db.quota;
+export const libraryBytes = db.libraryBytes;
 
 /* ------------------------------------------------------------------ assets */
 
@@ -300,12 +143,8 @@ export const quota = db.quota;
 let activeAssets: { gameId: string; urls: Map<string, string> } | null = null;
 
 export function releaseAssets() {
-  if (!activeAssets) return;
-  /* Only web object URLs are handles that leak. Desktop asset URLs are paths
-   * to files on disk; revoking one would be meaningless. */
-  for (const url of activeAssets.urls.values()) {
-    if (url.startsWith('blob:')) URL.revokeObjectURL(url);
-  }
+  /* Asset URLs are paths through the asset protocol, not object URLs, so there
+   * is no handle to revoke — dropping the map is the whole of it. */
   activeAssets = null;
 }
 

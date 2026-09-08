@@ -14,7 +14,6 @@ import { useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 
 import { importBundled, importGamePath, pendingArchives, type StoredGame } from '@/lib/library';
-import { isDesktop } from '.';
 
 export interface ImportHandlers {
   /** Called after each batch, so the library can refresh. */
@@ -35,7 +34,6 @@ export function useDesktopImports(handlers: ImportHandlers) {
   latest.current = handlers;
 
   useEffect(() => {
-    if (!isDesktop()) return;
     let live = true;
 
     const run = async (label: string, work: () => Promise<StoredGame[]>) => {

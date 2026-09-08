@@ -8,7 +8,11 @@
 //! webview, and a player who meant "restart the chapter" would instead drop
 //! the whole session, so restart is bound to `CmdOrCtrl+Shift+R`.
 
-use tauri::menu::{AboutMetadata, Menu, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+/* Only the application menu uses this, and that menu is macOS-only. Importing
+   it unconditionally warns on every Windows and Linux build. */
+#[cfg(target_os = "macos")]
+use tauri::menu::AboutMetadata;
 use tauri::{AppHandle, Runtime};
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {

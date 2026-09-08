@@ -1,0 +1,128 @@
+name: Release
+
+# Tags only. A push to main should not spend ten minutes building installers,
+# and a release should be a deliberate act with a version attached to it.
+on:
+  push:
+    tags:
+      - 'v*'
+
+# The workflow creates a release and uploads to it; nothing else needs write.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Windows installers and portable
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Cargo's own cache, keyed on Cargo.lock. Without it every tag pays the
+      # full ~5 minutes of compiling Tauri and its tree from scratch.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Before anything expensive: a tag that disagrees with package.json would
+      # produce an installer labelled with the wrong version, which is worse
+      # than a failed build because it looks like it worked.
+      - name: Check the tag matches the version
+        run: node scripts/check-version.mjs ${{ github.ref_name }}
+
+      - name: Read the version
+        id: version
+        shell: bash
+        run: echo "value=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: |
+          npm run build
+          npm run test:theme
+          npm run test:register
+          npm run test:webview
+          npm run test:rust
+
+      # NSIS and MSI both, because they are not interchangeable: MSI is what
+      # group policy and managed deployments can install, NSIS is the one that
+      # works for a user without administrator rights.
+      - name: Build installers
+        run: npm run tauri build -- --bundles nsis,msi
+
+      # The portable build is the same executable with nothing wrapped around
+      # it. Tauri resolves its resource directory next to the executable on
+      # Windows, so bundled games travel in the same folder.
+      - name: Assemble the portable build
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.value }}"
+          $stage = "portable/ChoiceScript-Player-$version-portable-x64"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+          # Globbed, not named. Tauri v2 derives the binary name from
+          # productName rather than the crate name, so hardcoding either one is
+          # a guess that breaks the day the other is true.
+          $exe = Get-ChildItem "src-tauri/target/release/*.exe" |
+            Where-Object { $_.Name -notmatch 'setup|installer' } |
+            Select-Object -First 1
+          if (-not $exe) { throw "no executable in src-tauri/target/release" }
+          Write-Host "portable binary: $($exe.Name)"
+          Copy-Item $exe.FullName "$stage/ChoiceScript Player.exe"
+          if (Test-Path "src-tauri/games") {
+            $games = Get-ChildItem "src-tauri/games/*.cszip" -ErrorAction SilentlyContinue
+            if ($games) {
+              New-Item -ItemType Directory -Force -Path "$stage/games" | Out-Null
+              Copy-Item "src-tauri/games/*.cszip" "$stage/games/"
+            }
+          }
+          Copy-Item "README.md" "$stage/README.md"
+          Compress-Archive -Path "$stage/*" -DestinationPath "$stage.zip" -Force
+
+      - name: Collect the artefacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Get-ChildItem -Recurse -Path "src-tauri/target/release/bundle" -Include *.exe,*.msi |
+            ForEach-Object { Copy-Item $_.FullName "release/" }
+          Copy-Item "portable/*.zip" "release/"
+          Get-ChildItem release | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ steps.version.outputs.value }}
+          path: release/*
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            ## ChoiceScript Player ${{ steps.version.outputs.value }}
+
+            | Download | Use it when |
+            | --- | --- |
+            | `.exe` (NSIS) | Normal install. No administrator rights needed. |
+            | `.msi` | Managed or scripted deployment. |
+            | `-portable-x64.zip` | No install at all. Unzip and run. |
+
+            Games, saves and settings live in `%APPDATA%\com.kmab.cs-tauri`.
+            The portable build keeps bundled games in a `games` folder beside
+            the executable.

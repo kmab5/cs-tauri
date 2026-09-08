@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DialogPanel } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { isDesktop } from '@/lib/desktop';
 import { getAppearance, setAppearance, type Appearance } from '@/lib/desktop/appearance';
 
 interface ScreenProps {
@@ -160,33 +159,30 @@ function Chips({
 function Settings({ cs, state }: { cs: ChoiceScriptApi; state: ChoiceScriptState }) {
   const { theme } = state;
   /*
-   * Window appearance is a separate setting from the reading theme, and only
-   * exists in the desktop app. The reading theme paints the author's page; this
-   * paints the frame around it, and it follows the operating system unless the
-   * player says otherwise. Re-read on each open rather than held in state: it
-   * lives in localStorage, and nothing else can change it while the dialog is up.
+   * Window appearance is a separate setting from the reading theme, and the two
+   * sitting one above the other is the design argument made visible: Window
+   * paints the frame and follows the operating system, Theme paints the
+   * author's page and follows the reader. Re-read on open rather than held in
+   * state — it lives in localStorage, and nothing else can change it while the
+   * dialog is up.
    */
-  const [appearance, setAppearanceState] = useState<Appearance>(() =>
-    isDesktop() ? getAppearance() : 'auto',
-  );
+  const [appearance, setAppearanceState] = useState<Appearance>(() => getAppearance());
 
   return (
     <div>
-      {isDesktop() && (
-        <Chips
-          legend="Window"
-          items={[
-            { id: 'auto', label: 'Match system' },
-            { id: 'light', label: 'Light' },
-            { id: 'dark', label: 'Dark' },
-          ]}
-          current={appearance}
-          onPick={(id) => {
-            setAppearance(id as Appearance);
-            setAppearanceState(id as Appearance);
-          }}
-        />
-      )}
+      <Chips
+        legend="Window"
+        items={[
+          { id: 'auto', label: 'Match system' },
+          { id: 'light', label: 'Light' },
+          { id: 'dark', label: 'Dark' },
+        ]}
+        current={appearance}
+        onPick={(id) => {
+          setAppearance(id as Appearance);
+          setAppearanceState(id as Appearance);
+        }}
+      />
       <Chips legend="Theme" items={cs.themes()} current={theme.name} onPick={cs.setTheme} />
       <Chips
         legend="Brightness"

@@ -1,23 +1,27 @@
 /**
- * Everything that is true only when the app is running inside Tauri.
+ * The platform layer.
  *
- * Imported once, first, from `main.tsx`. On the web every export here is inert,
- * so the static build is unaffected: `isDesktop()` is false and nothing is
- * installed.
+ * Imported once, first, from `main.tsx`: installs the webview polyfills, the
+ * external-link handler, the file-backed save store and the chrome appearance,
+ * then marks the document with the platform so CSS can branch on it.
  */
 import { installPolyfills } from './polyfills';
 import { installLinkHandler } from './links';
 import { installFileStore } from './store';
 import { installAppearance } from './appearance';
 
-export type Platform = 'macos' | 'windows' | 'linux' | 'web';
+export type Platform = 'macos' | 'windows' | 'linux';
 
 /**
- * Tauri injects `__TAURI_INTERNALS__` before any application script runs, so
- * this is safe to call at module scope. The older `__TAURI__` global is only
- * present when `withGlobalTauri` is set, which we do not use.
+ * Whether the Tauri IPC bridge is present.
+ *
+ * The app is a desktop application and everything below assumes the bridge is
+ * there. This exists for exactly one reason: `npm run dev` serves the same
+ * bundle over http, so opening that URL in an ordinary browser would otherwise
+ * fail deep inside an invoke with nothing to explain why. `main.tsx` checks it
+ * once and says so plainly.
  */
-export const isDesktop = (): boolean =>
+export const hasTauri = (): boolean =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 let cached: Platform | null = null;
@@ -29,7 +33,6 @@ let cached: Platform | null = null;
  */
 export function platform(): Platform {
   if (cached) return cached;
-  if (!isDesktop()) return (cached = 'web');
   const ua = navigator.userAgent;
   if (/Mac OS X|Macintosh/.test(ua)) cached = 'macos';
   else if (/Windows/.test(ua)) cached = 'windows';
@@ -37,23 +40,13 @@ export function platform(): Platform {
   return cached;
 }
 
-/**
- * `data-shell` and `data-platform` on <html> let CSS branch without a runtime
- * check in every component, and let the chrome register key its titlebar inset
- * and font stack off one attribute.
- */
-function markDocument() {
-  const root = document.documentElement;
-  root.dataset.shell = isDesktop() ? 'desktop' : 'web';
-  root.dataset.platform = platform();
-}
-
-if (isDesktop()) {
+if (hasTauri()) {
   installPolyfills();
   installLinkHandler();
   installFileStore();
-  markDocument();
   installAppearance();
-} else if (typeof document !== 'undefined') {
-  markDocument();
+}
+
+if (typeof document !== 'undefined') {
+  document.documentElement.dataset.platform = platform();
 }

@@ -19,6 +19,17 @@ const REMOVED = [
   ['tailwind.config.js', 'Tailwind v4 is CSS-first — the theme lives in src/index.css'],
   ['postcss.config.js', 'Tailwind v4 is a Vite plugin, not a PostCSS plugin'],
   ['e2e-test.js', 'renamed to e2e-test.cjs (this package is an ES module)'],
+
+  /* 0.1.6 — the web build was removed. Every one of these still type-checks
+     against the old contract, so leaving them behind fails `tsc -b` rather
+     than being harmlessly ignored. */
+  ['e2e-test.cjs', 'the static-site harness, replaced by scripts/test-webview.cjs'],
+  ['scripts/test-bundled-game.mjs', 'folded into scripts/test-webview.cjs'],
+  ['src/features/Library.tsx', 'the library page, replaced by the sidebar (Sidebar.tsx)'],
+  ['src/features/Toolbar.tsx', 'the in-page sticky title bar, replaced by the window titlebar'],
+  ['src/lib/db.web.ts', 'the IndexedDB backend; storage is files on disk now'],
+  ['src/lib/db.tauri.ts', 'became src/lib/db.ts — there is one backend, not two'],
+  ['src/lib/archive.ts', 'browser zip reading; extraction lives in src-tauri/src/archive.rs'],
 ];
 
 const found = REMOVED.filter(([p]) => existsSync(join(root, p)) && statSync(join(root, p)).isFile());

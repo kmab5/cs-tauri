@@ -8,8 +8,6 @@
 import { useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 
-import { isDesktop } from '.';
-
 export type MenuId =
   | 'open-game'
   | 'library'
@@ -31,7 +29,7 @@ const handlers = new Map<MenuId, Set<Handler>>();
 let listening = false;
 
 function start() {
-  if (listening || !isDesktop()) return;
+  if (listening) return;
   listening = true;
   void listen<string>('menu', (event) => {
     for (const fn of handlers.get(event.payload as MenuId) ?? []) fn();
@@ -50,7 +48,6 @@ export function useMenu(map: Partial<Record<MenuId, Handler>>) {
   latest.current = map;
 
   useEffect(() => {
-    if (!isDesktop()) return;
     start();
 
     const ids = Object.keys(latest.current) as MenuId[];

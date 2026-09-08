@@ -1,7 +1,6 @@
 @import 'tailwindcss';
 
-/* The chrome register: --app-* tokens, desktop layout, platform density.
-   Scoped to [data-shell="desktop"], so the static site is unaffected. */
+/* The chrome register: --app-* tokens, window layout, platform density. */
 @import './styles/chrome.css';
 
 /*
@@ -81,7 +80,9 @@
     --radius-cs: var(--cs-radius, 3px);
 
     margin: 0;
-    background-color: var(--cs-paper, #edeae4);
+    /* No background here. The window is transparent so the platform can
+       composite vibrancy behind the chrome; the reading theme's paper is
+       painted by .app-main in styles/chrome.css. */
     color: var(--cs-ink, #22201c);
     font-family: var(--cs-font-body, Georgia, serif);
     font-size: var(--cs-size-body, 1.125rem);
