@@ -8,6 +8,7 @@
 import { installPolyfills } from './polyfills';
 import { installLinkHandler } from './links';
 import { installFileStore } from './store';
+import { installAppearance } from './appearance';
 
 export type Platform = 'macos' | 'windows' | 'linux' | 'web';
 
@@ -52,6 +53,7 @@ if (isDesktop()) {
   installLinkHandler();
   installFileStore();
   markDocument();
+  installAppearance();
 } else if (typeof document !== 'undefined') {
   markDocument();
 }

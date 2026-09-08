@@ -9,11 +9,22 @@
  */
 import { Toaster as Sonner } from 'sonner';
 
+import { isDesktop } from '@/lib/desktop';
+
 export function Toaster() {
+  /*
+   * Top-centre is a phone idiom: it is where a thumb is not, and where the
+   * notch already trains people to look. On a desktop the corner is where
+   * notifications live, and it keeps the reading column clear.
+   *
+   * Three at a time, because Choice of Magics alone calls *achieve 325 times.
+   */
+  const desktop = isDesktop();
   return (
     <Sonner
-      position="top-center"
-      offset={12}
+      position={desktop ? 'bottom-right' : 'top-center'}
+      visibleToasts={desktop ? 3 : 3}
+      offset={desktop ? 16 : 12}
       toastOptions={{
         unstyled: true,
         classNames: {

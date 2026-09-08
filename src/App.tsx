@@ -3,6 +3,8 @@ import type { ChoiceScriptApi } from '@/lib/choicescript';
 import { loadEngine, loadIcon, openGame, releaseAssets, type StoredGame } from '@/lib/library';
 import { Library } from '@/features/Library';
 import { Player } from '@/features/Player';
+import { Shell } from '@/features/Shell';
+import { isDesktop } from '@/lib/desktop';
 import { Button } from '@/components/ui/button';
 
 export default function App() {
@@ -39,6 +41,31 @@ export default function App() {
           Reload
         </Button>
       </div>
+    );
+  }
+
+  /*
+   * The desktop frame keeps the library alongside the story, so it renders
+   * whether or not a game is open. The page cannot: a phone-width viewport has
+   * room for one or the other, which is why the web build swaps between them.
+   */
+  if (isDesktop()) {
+    return (
+      <Shell
+        game={game}
+        cs={cs}
+        onPlay={(manifest) => {
+          if (manifest.id === game?.id) return;
+          /* The engine holds one game at a time and cannot be re-pointed in
+             place, so switching restarts the process. Saves are on disk. */
+          if (game) return window.location.reload();
+          open(manifest);
+        }}
+        onExit={() => {
+          releaseAssets();
+          window.location.reload();
+        }}
+      />
     );
   }
 

@@ -12,11 +12,12 @@
     "build:engine": "node scripts/build-engine.mjs",
     "test:e2e": "node e2e-test.cjs",
     "test:theme": "node check-theme-scope.cjs",
-    "test": "npm run build && node check-theme-scope.cjs && node e2e-test.cjs",
+    "test": "npm run build && node check-theme-scope.cjs && node scripts/check-register.mjs && node e2e-test.cjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "test:rust": "cd src-tauri && cargo test"
+    "test:rust": "cd src-tauri && cargo test",
+    "test:register": "node scripts/check-register.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",

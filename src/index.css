@@ -1,5 +1,9 @@
 @import 'tailwindcss';
 
+/* The chrome register: --app-* tokens, desktop layout, platform density.
+   Scoped to [data-shell="desktop"], so the static site is unaffected. */
+@import './styles/chrome.css';
+
 /*
  * Tailwind v4 is CSS-first: the theme lives here, not in a config file.
  *

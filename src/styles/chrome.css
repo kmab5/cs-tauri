@@ -1,0 +1,428 @@
+/*
+ * The chrome register.
+ *
+ * The application has two visual registers and they must not mix.
+ *
+ *   --cs-*   the page. The author's reading surface. Follows the reading theme
+ *            the player picked, all six of them, and nothing else.
+ *   --app-*  the chrome. Titlebar, sidebar, inspector, menus. Follows the
+ *            operating system's light or dark appearance, and nothing else.
+ *
+ * On the web that distinction does not exist, because the page *is* the
+ * application: index.css maps every token onto --cs-* and choosing a sepia
+ * theme repaints everything, correctly. In a window it is wrong. The frame
+ * belongs to the OS and should not turn sepia because the reader likes sepia
+ * for prose. So everything here is scoped to [data-shell="desktop"], and the
+ * static site is untouched.
+ *
+ * scripts/check-register.mjs fails the build if the two registers cross.
+ */
+
+:root {
+  /* Light appearance. Neutral rather than tinted: chrome should read as part
+     of the window, not as part of the book. */
+  --app-chrome-solid: #f3f2f0;
+  --app-chrome-elev: #ffffff;
+  --app-chrome-sunken: #e9e8e5;
+  --app-border: rgba(0, 0, 0, 0.11);
+  --app-border-strong: rgba(0, 0, 0, 0.18);
+  --app-label: #1d1d1f;
+  --app-label-dim: #6c6c72;
+  --app-accent: #2f5fb5;
+  --app-accent-fg: #ffffff;
+  --app-accent-wash: rgba(47, 95, 181, 0.12);
+  --app-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.08);
+
+  --app-chrome: var(--app-chrome-solid);
+
+  --app-titlebar-h: 44px;
+  --app-titlebar-inset: 0px;
+  --app-control-h: 28px;
+  --app-radius: 6px;
+  --app-sidebar-w: 260px;
+  --app-inspector-w: 320px;
+
+  --app-font-ui: system-ui, sans-serif;
+}
+
+[data-appearance='dark'] {
+  --app-chrome-solid: #1f1f22;
+  --app-chrome-elev: #2b2b2f;
+  --app-chrome-sunken: #171719;
+  --app-border: rgba(255, 255, 255, 0.1);
+  --app-border-strong: rgba(255, 255, 255, 0.18);
+  --app-label: #f2f2f5;
+  --app-label-dim: #9b9ba2;
+  --app-accent: #6f9de8;
+  --app-accent-fg: #10131a;
+  --app-accent-wash: rgba(111, 157, 232, 0.16);
+  --app-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.32);
+}
+
+/* Platform faces. The reading surface keeps the engine's serif families; only
+   the chrome takes the system UI font, because that is what makes a window
+   look like it belongs to the desktop it is running on. */
+[data-platform='macos'] {
+  --app-font-ui: -apple-system, 'SF Pro Text', BlinkMacSystemFont, system-ui, sans-serif;
+  --app-radius: 7px;
+  --app-titlebar-h: 52px;
+  /* Clears the traffic lights, which the overlay titlebar draws over our bar. */
+  --app-titlebar-inset: 78px;
+}
+[data-platform='windows'] {
+  --app-font-ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --app-radius: 4px;
+}
+[data-platform='linux'] {
+  --app-font-ui: Inter, Cantarell, 'Noto Sans', system-ui, sans-serif;
+}
+
+/*
+ * Density.
+ *
+ * 44px is the WCAG 2.1 AA target size for touch, and the web build keeps it
+ * everywhere. Under a cursor the same figure reads as a phone app stretched
+ * over a desktop, so the shell tightens to 28px — and gives it straight back
+ * on a touchscreen, which a Windows laptop may well have.
+ */
+html[data-shell='desktop'] {
+  --spacing-touch: 28px;
+}
+@media (pointer: coarse) {
+  html[data-shell='desktop'] {
+    --spacing-touch: 44px;
+  }
+}
+
+[data-shell='desktop'] {
+  /* Vibrancy needs the window to show through, and body paints the reading
+     theme's paper. So on the desktop the page background moves onto the
+     reading column, which is the only surface that should carry it anyway. */
+  background: transparent;
+}
+[data-shell='desktop'] body {
+  background: transparent;
+  overscroll-behavior: none;
+}
+
+/* Where the platform gives us a translucent window, the chrome uses it. Every
+   surface below still has an opaque colour underneath, because Linux has no
+   equivalent and older Windows does not get Mica. */
+[data-shell='desktop'][data-platform='macos'],
+[data-shell='desktop'][data-platform='windows'] {
+  --app-chrome: color-mix(in srgb, var(--app-chrome-solid) 72%, transparent);
+}
+
+/* ------------------------------------------------------------------ layout */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  font-family: var(--app-font-ui);
+  color: var(--app-label);
+}
+
+.app-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  background: var(--cs-paper, #edeae4);
+}
+
+/* The reading column. Opaque, always: prose over a blurred desktop is
+   unreadable, and the brief is that the page recedes, not that it dissolves. */
+.app-reading {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.app-measure {
+  margin: 0 auto;
+  max-width: var(--cs-measure, 66ch);
+  padding: 1.5rem 2rem 6rem;
+}
+
+/* --------------------------------------------------------------- titlebar */
+
+.app-titlebar {
+  display: flex;
+  height: var(--app-titlebar-h);
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  padding-left: max(0.75rem, var(--app-titlebar-inset));
+  padding-right: 0.75rem;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-chrome);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+.app-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.app-title span {
+  font-weight: 400;
+  color: var(--app-label-dim);
+}
+
+/* ---------------------------------------------------------------- controls */
+
+.app-btn {
+  display: inline-flex;
+  min-height: var(--app-control-h);
+  align-items: center;
+  gap: 0.375rem;
+  border: 0;
+  border-radius: var(--app-radius);
+  background: transparent;
+  padding: 0 0.5rem;
+  color: var(--app-label-dim);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: default;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.app-btn:hover {
+  background: var(--app-accent-wash);
+  color: var(--app-accent);
+}
+.app-btn[aria-pressed='true'] {
+  background: var(--app-accent-wash);
+  color: var(--app-accent);
+}
+.app-btn:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 1px;
+}
+.app-btn-primary {
+  justify-content: center;
+  background: var(--app-accent);
+  color: var(--app-accent-fg);
+  padding: 0 0.75rem;
+}
+.app-btn-primary:hover {
+  background: var(--app-accent);
+  color: var(--app-accent-fg);
+  filter: brightness(1.08);
+}
+
+.app-badge {
+  border-radius: 999px;
+  background: var(--app-accent-wash);
+  padding: 0 0.375rem;
+  color: var(--app-accent);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------------- sidebar */
+
+.app-sidebar {
+  display: flex;
+  width: var(--app-sidebar-w);
+  flex-direction: column;
+  border-right: 1px solid var(--app-border);
+  background: var(--app-chrome);
+  /* The traffic lights sit over the sidebar on macOS, so its own header
+     carries the inset and the titlebar next to it does not. */
+  padding-top: env(safe-area-inset-top);
+}
+.app-sidebar[hidden] {
+  display: none;
+}
+
+.app-sidebar-head {
+  display: flex;
+  height: var(--app-titlebar-h);
+  flex-shrink: 0;
+  align-items: flex-end;
+  padding: 0 0.625rem 0.5rem max(0.625rem, var(--app-titlebar-inset));
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--app-label-dim);
+}
+
+.app-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  list-style: none;
+}
+
+.app-sidebar-foot {
+  border-top: 1px solid var(--app-border);
+  padding: 0.5rem;
+}
+
+.app-game {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: var(--app-radius);
+  background: transparent;
+  padding: 0.375rem 0.5rem;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.app-game:hover {
+  background: var(--app-chrome-sunken);
+}
+.app-game[aria-current='true'] {
+  background: var(--app-accent);
+  color: var(--app-accent-fg);
+}
+.app-game[aria-current='true'] .app-game-sub {
+  color: color-mix(in srgb, var(--app-accent-fg) 75%, transparent);
+}
+.app-game:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: -2px;
+}
+
+.app-game-art {
+  display: grid;
+  height: 34px;
+  width: 34px;
+  flex-shrink: 0;
+  place-items: center;
+  overflow: hidden;
+  border-radius: calc(var(--app-radius) - 2px);
+  background: var(--app-chrome-sunken);
+  object-fit: cover;
+  color: var(--app-label-dim);
+  font-size: 0.75rem;
+}
+
+.app-game-text {
+  min-width: 0;
+  flex: 1;
+}
+.app-game-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.app-game-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--app-label-dim);
+  font-size: 0.75rem;
+}
+
+/* --------------------------------------------------------------- inspector */
+
+.app-inspector {
+  display: flex;
+  width: var(--app-inspector-w);
+  flex-direction: column;
+  border-left: 1px solid var(--app-border);
+  background: var(--app-chrome);
+}
+.app-inspector[hidden] {
+  display: none;
+}
+
+.app-inspector-head {
+  display: flex;
+  height: var(--app-titlebar-h);
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--app-border);
+  padding: 0 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--app-label-dim);
+}
+
+/*
+ * The stats scene is authored content, so inside the panel it is allowed to
+ * use the page register: it is the author's writing, not our chrome. This is
+ * the one place the two meet, and it is deliberate.
+ */
+.app-inspector-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.875rem 1rem 2rem;
+  color: var(--cs-ink, #22201c);
+  font-size: 0.875rem;
+}
+
+.app-note {
+  margin: 0;
+  color: var(--app-label-dim);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------ drop overlay */
+
+.app-drop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--app-chrome-solid) 82%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.app-drop-frame {
+  border: 2px dashed var(--app-accent);
+  border-radius: calc(var(--app-radius) * 2);
+  padding: 3rem 4rem;
+  color: var(--app-accent);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+/* --------------------------------------------------------------- scrollbars */
+
+[data-shell='desktop'] ::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+[data-shell='desktop'] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-shell='desktop'] ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: var(--app-border-strong);
+}
+[data-shell='desktop'] ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--app-label-dim);
+}
+
+/* Anything marked as a drag region must not also look draggable to a cursor
+   that is about to click a button inside it. */
+[data-tauri-drag-region] {
+  cursor: default;
+  user-select: none;
+}

@@ -5,6 +5,7 @@
 
 mod archive;
 mod library;
+mod menu;
 mod paths;
 mod store;
 
@@ -102,6 +103,12 @@ pub fn run() {
 
     let app = builder
         .plugin(tauri_plugin_opener::init())
+        .menu(menu::build)
+        // Menu items act in the webview, where the engine is. Rust only owns
+        // the shape of the menu and its accelerators.
+        .on_menu_event(|app, event| {
+            let _ = app.emit("menu", event.id().0.clone());
+        })
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(Pending::default())
         .invoke_handler(tauri::generate_handler![

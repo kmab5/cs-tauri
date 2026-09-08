@@ -26,10 +26,17 @@ export function Player({
   cs,
   game,
   onExit,
+  variant = 'page',
 }: {
   cs: ChoiceScriptApi;
   game: StoredGame;
   onExit: () => void;
+  /**
+   * 'page' is the static site: the player owns the whole viewport and carries
+   * its own sticky title bar. 'shell' is the desktop window, where the frame
+   * supplies the titlebar and the reading pane is what scrolls.
+   */
+  variant?: 'page' | 'shell';
 }) {
   const state = useChoiceScript(cs);
   useAchievementToasts(state);
@@ -37,15 +44,20 @@ export function Player({
   /* a new screen starts at the top; a reader should never land mid-page */
   const screen = useRef(state.history);
   useEffect(() => {
-    if (screen.current !== state.history) {
-      screen.current = state.history;
-      window.scrollTo({ top: 0, behavior: state.theme.animate ? 'smooth' : 'auto' });
-    }
-  }, [state.history, state.theme.animate]);
+    if (screen.current === state.history) return;
+    screen.current = state.history;
+    const behavior = state.theme.animate ? 'smooth' : 'auto';
+    /* In the shell the window never scrolls — the reading pane does. */
+    const pane = variant === 'shell' ? document.querySelector('.app-reading') : null;
+    if (pane) pane.scrollTo({ top: 0, behavior });
+    else window.scrollTo({ top: 0, behavior });
+  }, [state.history, state.theme.animate, variant]);
 
   return (
-    <div className="mx-auto max-w-[var(--cs-measure,66ch)] px-5 pb-24">
-      <TitleBar cs={cs} state={state} fallbackTitle={game.title} onExit={onExit} />
+    <div className={variant === 'shell' ? '' : 'mx-auto max-w-[var(--cs-measure,66ch)] px-5 pb-24'}>
+      {variant === 'page' && (
+        <TitleBar cs={cs} state={state} fallbackTitle={game.title} onExit={onExit} />
+      )}
 
       {state.loading && (
         <p className="font-ui text-sm text-ink-faint" role="status">

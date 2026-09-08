@@ -222,3 +222,67 @@ node ../vite-e2e-test.js /path/to/game/mygame             # any game
 
 The e2e harness serves the built app from the backend, uploads a game archive,
 and plays it.
+
+---
+
+## Desktop
+
+The same front end also runs as a native application for macOS, Windows and Linux. Games, saves
+and settings are ordinary files on your own machine; nothing is sent anywhere.
+
+```bash
+npm install
+npm run tauri:dev     # develop
+npm run tauri:build   # installers into src-tauri/target/release/bundle/
+```
+
+Requires the [Rust toolchain](https://rustup.rs) and, on Linux, `webkit2gtk-4.1` and `gtk3`
+development packages.
+
+### Where things live
+
+| Platform | Data directory |
+| --- | --- |
+| macOS | `~/Library/Application Support/com.kmab5.choicescript` |
+| Windows | `%APPDATA%\com.kmab5.choicescript` |
+| Linux | `~/.local/share/com.kmab5.choicescript` |
+
+```
+games/<id>/manifest.json     title, author, scene list, achievements
+games/<id>/scenes/*.txt      the game's text, as the author wrote it
+games/<id>/assets/…          images
+stores/CS-<id>.json          saves, achievements, per-game settings
+```
+
+Plain text and JSON throughout, so a game folder can be copied, backed up, or read in an editor.
+Deleting a game deletes its store with it.
+
+### Getting games in
+
+Drop an archive anywhere in the window, use **File ▸ Open Game…**, or double-click a `.cszip` — the
+same zip a game ships as, renamed so the operating system can associate it with the app. Anything
+in `src-tauri/games/*.cszip` is imported once on a fresh profile.
+
+Archives are unpacked in Rust: the format is detected from the file's magic bytes rather than its
+extension, entries that would escape the game's own folder are refused, and the old ChoiceScript
+runtime that published games bundle is dropped along with any signing keys that came with it.
+
+### What differs from the web build
+
+The reading surface is identical. The frame around it is not:
+
+- **Two token registers.** The chrome follows your operating system's light or dark appearance; the
+  page follows whichever of the six reading themes you picked. A sepia reading theme does not
+  repaint the sidebar. `npm run test:register` enforces the split.
+- **Three panes.** Library on the left, story in the middle, character sheet on the right above
+  1100 px. Focus mode (`⌘⇧F`) hides both.
+- **Native menus** with real accelerators. Restart is `⌘⇧R`, not `⌘R`, because every webview
+  treats `⌘R` as reload.
+- **Density.** Controls are 28 px under a cursor and 44 px under a touchscreen.
+- **Keyboard reading.** Space and PageDown page and then continue; number keys select an option;
+  Enter confirms; arrow keys move between options once one has focus.
+
+### Bundled games and licensing
+
+`src-tauri/games/` is gitignored. A commercial game placed there for a local build must not be
+redistributed inside the installers you produce.

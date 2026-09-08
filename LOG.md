@@ -5,6 +5,188 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 4 — Phase 9 (reading polish, icons, packaging)
+
+The plan is now complete. All nine phases are implemented; the Rust half remains uncompiled.
+
+### Delivered
+
+| File | What it does |
+| --- | --- |
+| `src/features/useReadingKeys.ts` | Keyboard paging and per-game scroll memory |
+| `src-tauri/icons/*` | A real icon set: 32/128/256 PNG, `.ico`, `.icns`, 1024 source |
+| `README.md` | A Desktop section: build, data locations, what differs from the web |
+
+**Modified:** `src/features/Shell.tsx` (focus mode, headless `ReadingKeys`),
+`src-tauri/src/menu.rs` (Focus Mode item), `src/lib/desktop/menu.ts` (the new id).
+
+### Keyboard reading
+
+Most of what was needed already existed and I did not rebuild it: the engine's number shortcuts
+select an option, Enter submits, and because the choices are real radio inputs the arrow keys move
+between them natively once one has focus.
+
+What was missing was paging. Space and PageDown scroll 85% of the pane, and at the bottom of a
+passage whose only remaining action is a page break they continue instead — which is what pressing
+it again means to a reader. Shift+Space and PageUp go back; Home and End jump.
+
+**Arrow keys are deliberately untouched.** A ChoiceScript screen is often a page of prose above its
+choices, and hijacking Down to move the selection would take scrolling away from someone in the
+middle of reading. Native radio behaviour already covers the case where the reader has reached the
+options.
+
+Scroll position is restored once per session, from localStorage rather than the engine's save
+store: it describes the window, not the story, and should not travel inside a save file into a
+different window size.
+
+### Focus mode
+
+`⌘⇧F`, or the button in the titlebar. Hides both side panes without forgetting whether they were
+open, so leaving it restores the layout the reader had. Escape exits — it is the way out of a mode,
+never the only way in.
+
+### Icons
+
+The build could not run without them, because `tauri.conf.json` names five files. Rather than
+leave you blocked, they are generated: an original mark, a branching path on a blue rounded
+square, drawn at 1024 and downsampled. It reads cleanly at 32 px, which is the only size that
+really tests an icon.
+
+The `.icns` is written by hand. Pillow only saves that format on macOS, where it shells out to
+`iconutil`, so the container is assembled directly: `icns`, total length, then OSType, length and
+PNG payload per entry, across eleven sizes including the `@2x` retina types. Replace the set any
+time with `npm run tauri icon <your 1024 png>`.
+
+### Verified
+
+- `npm run build` — clean. Bundle 445 kB, CSS 37.9 kB.
+- `node check-theme-scope.cjs` — 16 tokens resolve.
+- `node scripts/check-register.mjs` — 19 chrome tokens, none crossing.
+- `node e2e-test.cjs` — **22 passed, 0 failed.**
+- Icon set opened back with Pillow to confirm the hand-written `.icns` parses as ICNS at 1024 and
+  the `.ico` carries all seven resolutions.
+
+One real bug caught here: `tsc --noEmit` passed while `tsc -b` failed on the new `toggle-focus`
+menu id. The two resolve project references differently, so **`npm run build` is the check that
+counts** — `typecheck` alone will let a missing union member through.
+
+### What is left
+
+Only compilation. `cargo build` has never run against any of `src-tauri/`. In likely order of
+trouble: `SubmenuBuilder`'s macOS-only helpers, `event.id().0` versus `.as_ref()` across 2.x
+releases, `PredefinedMenuItem::fullscreen` on Windows, and `EffectsBuilder`'s import path. Each is
+isolated to a few lines, and the LOG entries above say what to do with them.
+
+After that, the first genuine test is the one nothing here can substitute for: open Choice of
+Magics, play into chapter one, and check that a chapter plate renders. 73 `*text_image` calls
+depend on the asset protocol scope being right.
+
+---
+
+## 2026-09-08 · Session 3 — Phases 6 to 8 (the native shell and the theme split)
+
+### Delivered
+
+`choicescript-3.zip`, the whole repository with structure intact. Unpack over your checkout,
+`npm install`, `npm run tauri:dev`.
+
+**New this session**
+
+| File | What it does |
+| --- | --- |
+| `src-tauri/src/menu.rs` | The native menu bar. Items forward their id to the webview; Rust owns only the shape and the accelerators |
+| `src/lib/desktop/menu.ts` | `useMenu()` — components register the ids they handle, so menu items and on-screen buttons share one code path |
+| `src/lib/desktop/appearance.ts` | Chrome light/dark following the OS, with a stored override |
+| `src/styles/chrome.css` | The `--app-*` register: tokens, platform faces, density, layout, scrollbars |
+| `src/features/Shell.tsx` | The window frame: titlebar, three panes, drag regions |
+| `src/features/Sidebar.tsx` | The library as a permanent shelf |
+| `src/features/StatsPanel.tsx` | The docked character sheet |
+| `src/features/DropOverlay.tsx` | The whole window as a drop target |
+| `scripts/check-register.mjs` | Build guard: fails if the two registers cross |
+
+**Modified:** `src-tauri/src/lib.rs` (menu registration), `src/App.tsx` (desktop branch),
+`src/features/Player.tsx` (`variant="shell"`), `src/components/ui/toaster.tsx` (corner toasts),
+`src/index.css` (imports the chrome register), `src/lib/desktop/index.ts`, `package.json`.
+
+### The theming, concretely
+
+Two registers, and the build now fails if they cross:
+
+- `--cs-*` is the page. It follows the reading theme the player picked, all six of them.
+- `--app-*` is the chrome. It follows the operating system's light or dark appearance and nothing
+  else. Nineteen tokens: chrome surfaces, borders, labels, accent, shadow, titlebar height,
+  control height, radius, pane widths, UI font.
+
+Everything is scoped to `[data-shell="desktop"]`, so the static site is untouched — which the 22
+e2e assertions confirm rather than assume.
+
+What that buys, specifically: picking sepia no longer repaints the sidebar. Chrome takes the
+platform UI face (SF Pro, Segoe UI Variable, Inter/Cantarell) while prose keeps the engine's
+serifs. Controls drop from 44 px to 28 px under a cursor and go straight back to 44 px under
+`(pointer: coarse)`, because the WCAG target size is about fingers, not mice. Scrollbars are thin
+overlay thumbs with a stable gutter. Toasts moved to the bottom right, capped at three, since the
+bundled game alone calls `*achieve` 325 times.
+
+Vibrancy needed one structural change: `background: transparent` on `html` and `body` in the
+desktop shell, with the reading theme's paper moving onto `.app-main`. Otherwise the opaque body
+paints over the material the window manager is compositing. The reading column stays fully
+opaque — prose over a blurred desktop is unreadable, and the whole brief is that the page recedes,
+not that it dissolves.
+
+### The engine constraint that shaped the stats panel
+
+The plan called for a live docked inspector. The engine will not allow one, and it is worth
+writing down why.
+
+`showStats()` sets `bus.statsMode`, and while that flag is up **every** block the engine emits
+routes to the stats channel (`bus.js:74`, `:86`, `:96`). A panel that simply stayed open would
+swallow the story's own output the moment the player made a choice. `shellCloseOverlay()` then
+clears `statsBlocks` outright, so the panel cannot just hold the overlay open and read from it
+either.
+
+So the panel is a snapshot: run the scene, copy the blocks out, close the overlay immediately to
+lower the flag, and re-read whenever the player reaches a new screen. Refreshing that often is
+safe because the engine runs the stats scene with `saveSlot: 'temp'` (`shell.js:79`), its own
+convention for exactly this — the autosave concern in the plan turned out to be already handled
+upstream. Interactive stats screens keep their dialog; a page that asks a question cannot be
+answered from a snapshot, so the panel says so and offers the full screen.
+
+### Verified
+
+- `npm run build` — clean. Bundle 442 kB, CSS 37.9 kB.
+- `npm run typecheck` — clean.
+- `node check-theme-scope.cjs` — 16 tokens resolve against the live theme.
+- `node scripts/check-register.mjs` — 19 chrome tokens, none crossing. Also confirmed it *fails*
+  correctly, which is the only way to know a guard works.
+- `node e2e-test.cjs` — **22 passed, 0 failed**, including "every control clears the 44px target"
+  and "it is a centred dialog, not a drawer". Both would have broken if the density change or the
+  layout rework had leaked into the web build.
+
+`npm test` now runs all four.
+
+### Still not compiled
+
+No Rust toolchain here, so `menu.rs` joins the rest of `src-tauri/` as unverified. Most likely
+first-build issues, in order: `SubmenuBuilder`'s macOS-only helpers (`services`, `hide_others`)
+are behind the `#[cfg(target_os = "macos")]` arm already; `event.id().0` is the `MenuId` tuple
+field and became `.as_ref()` in some 2.x releases; `PredefinedMenuItem::fullscreen` exists on
+macOS only — if it fails on Windows, wrap it the same way as the app menu.
+
+### Behaviour worth knowing
+
+Switching games from the sidebar reloads the process. The engine holds one game at a time and
+cannot be re-pointed in place, so there is no honest alternative short of tearing the interpreter
+down. Saves are on disk, so nothing is lost — but it is a visible flash and I would rather flag it
+than let you find it.
+
+### Next — Phase 9
+
+Keyboard-first reading (Space and PageDown to page, arrows to move the choice selection, Enter to
+confirm), scroll position restored per game, a full-screen reading mode that hides both side
+panes, then icons and the packaging pass.
+
+---
+
 ## 2026-09-08 · Session 2 — Phases 1 to 5 (storage complete, interface not started)
 
 ### Delivered
