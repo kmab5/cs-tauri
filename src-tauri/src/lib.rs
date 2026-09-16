@@ -4,6 +4,7 @@
 //! unpacking archives, the game library on disk, and the engine's save files.
 
 mod archive;
+mod devtools;
 mod library;
 mod menu;
 mod paths;
@@ -95,6 +96,8 @@ pub fn run() {
             library::decompress,
             library::take_bundled,
             library::app_mode,
+            devtools::dev_info,
+            devtools::build_standalone,
             menu::set_game_menu_enabled,
             menu::set_menu_visible,
             store::read_store,

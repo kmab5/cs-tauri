@@ -1468,3 +1468,84 @@ kbd,
     animation: none;
   }
 }
+
+/* ---------------------------------------------------- the standalone builder */
+
+/*
+ * Development-only, and it looks it: a form and a terminal, no ornament. The
+ * log is the important part of the dialog, so it gets the monospace face and
+ * the room.
+ */
+.build-form {
+  display: grid;
+  gap: var(--app-2);
+  margin-bottom: var(--app-4);
+}
+.build-row {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--app-3);
+  font-family: var(--app-font-ui);
+  font-size: var(--app-text-md);
+}
+.build-row > span {
+  color: var(--app-label);
+}
+.build-row small {
+  display: block;
+  color: var(--app-label-dim);
+  font-size: var(--app-text-xs);
+}
+
+.build-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--app-1) var(--app-3);
+  margin: 0 0 var(--app-3);
+  border: 0;
+  padding: 0;
+  font-family: var(--app-font-ui);
+  font-size: var(--app-text-md);
+}
+.build-checks legend {
+  margin-bottom: var(--app-2);
+  color: var(--app-label-dim);
+  font-size: var(--app-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.build-checks label {
+  display: flex;
+  align-items: center;
+  gap: var(--app-2);
+}
+.build-checks input:disabled + * ,
+.build-checks label:has(input:disabled) {
+  color: var(--app-label-dim);
+}
+
+.build-log {
+  max-height: 14rem;
+  margin: var(--app-3) 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  background: var(--app-chrome-sunken);
+  padding: var(--app-2);
+  color: var(--app-label);
+  font-family: var(--cs-font-mono, ui-monospace, monospace);
+  font-size: var(--app-text-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 560px) {
+  .build-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--app-1);
+  }
+}

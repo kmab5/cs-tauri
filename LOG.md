@@ -5,6 +5,88 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 14 — v0.2.3, the builder as a GUI (development only)
+
+Every game on the shelf now has a hammer button in a dev instance. It opens a
+dialog with the CLI's flags as controls and the CLI's output streamed into it —
+output folder, app name, version, identifier, portable/NSIS/MSI, icon from the
+cover, skip tests.
+
+**It is a front end, not a second builder.** The dialog spawns
+`scripts/cs-export.mjs` and reads its stdout and stderr line by line. There is
+one builder, and the terminal and the GUI are both ways of starting it. Anything
+else and the two would drift the first time a flag changed.
+
+The game is staged as an archive **without your saves** before the build: a
+reader exporting a game wants their progress to travel with it, a *build* of
+that game does not want the builder's own save file in every copy that ships.
+`export_game` and the builder now share one `write_archive` with an
+`include_saves` flag.
+
+Streamed rather than collected, because a build takes minutes and a window
+showing nothing for minutes is indistinguishable from a hang. Closing the dialog
+mid-build leaves it running and says so.
+
+### The gate, and the first attempt at it failing
+
+Two layers:
+
+1. **The interface** is behind `import.meta.env.DEV`, so a production bundle
+   does not contain it.
+2. **The Rust commands** refuse under `cfg(debug_assertions)`. Belt as well as
+   braces because this spawns `node` against a path derived from
+   `CARGO_MANIFEST_DIR` — meaningless outside a checkout, and not something to
+   leave in a shipped app whatever the interface does.
+
+My first version of layer 1 did not work, and I only know that because I
+checked the built bundle instead of trusting the reasoning:
+
+```
+build_standalone       in dist: PRESENT
+dev_info               in dist: PRESENT
+Build an app for       in dist: PRESENT
+```
+
+Two mistakes. `isDev()` is a *function call*, which a bundler cannot fold, so
+the branch stayed alive; and the dialog was a static import, which keeps a
+module in the graph however dead the branch around it is. The fix reads
+`import.meta.env.DEV` directly and makes the dialog a dynamic import inside the
+folded branch, so the chunk is never emitted:
+
+```
+build_standalone       absent
+dev_info               absent
+BuildAppDialog         absent
+cs-export              absent
+```
+
+There are four harness assertions on that now — it searches `dist/` for the
+command names and the component name — because "it is dev-only" is a claim
+about a build artefact, and claims about artefacts should be checked against
+artefacts. `dist/` *is* a production bundle when the harness runs, which is
+what makes this testable at all.
+
+Also worth noting: the version offered as the default now comes from
+`package.json` through a Vite `define`, rather than being a third place a
+version number could disagree.
+
+### Verified
+
+- `npm run test:webview` — **80 passed, 0 failed** (four new, all about the
+  gate)
+- `npm run test:standalone` — 16 passed, 0 failed
+- `npm run test:game` — **75 passed, 0 failed** on Choice of Magics
+- build, typecheck, theme-scope, register, stale, version, detector — pass
+
+### Uncompiled here, as ever
+
+`devtools.rs` and the refactored `write_archive`. The interesting risk is the
+`Box<dyn Read + Send>` the two output streams are merged through; if that
+fights the borrow checker, the fallback is one thread per stream with the
+concrete types, which is a five-line change.
+
+---
+
 ## 2026-09-08 · Session 13 — v0.2.2, five from the first real export
 
 The exported app working is the good news. All five notes are fixed, and two of

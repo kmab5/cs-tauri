@@ -6,8 +6,8 @@
  * once one is running the sidebar shows *that* game, so there is no way to swap
  * a game out from under a live interpreter by accident.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Clock, Plus, Share2, Trash2 } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Clock, Hammer, Plus, Share2, Trash2 } from 'lucide-react';
 
 import {
   deleteGame,
@@ -20,6 +20,22 @@ import {
 import { useDesktopImports } from '@/lib/desktop/openWith';
 import { useMenu } from '@/lib/desktop/menu';
 import { DropOverlay } from './DropOverlay';
+
+/*
+ * The standalone builder, for development instances only.
+ *
+ * `import.meta.env.DEV` is read directly rather than through a helper, and the
+ * dialog is a dynamic import inside the dead branch — both on purpose. A
+ * function call the bundler cannot fold leaves the branch alive, and a static
+ * import keeps the module in the graph whatever the branch does: the first
+ * attempt at this shipped `build_standalone` and the dialog's strings into the
+ * production bundle. With the ternary folding to null the import is unreachable
+ * and the chunk is never emitted, which `npm run test:webview` verifies by
+ * searching `dist/` for those strings.
+ */
+const BuildAppDialog = import.meta.env.DEV
+  ? lazy(() => import('./BuildAppDialog').then((m) => ({ default: m.BuildAppDialog })))
+  : null;
 
 function Cover({ game }: { game: StoredGame }) {
   const [src, setSrc] = useState<string | null>(null);
@@ -104,6 +120,9 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
   const [confirming, setConfirming] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
   const [exported, setExported] = useState<string | null>(null);
+  /* Development instances only. `isDev()` is a compile-time constant, so in a
+     production bundle this state, the button and the dialog are all removed. */
+  const [building, setBuilding] = useState<StoredGame | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(() => {
@@ -290,6 +309,16 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
                 <Share2 className="size-3.5" aria-hidden />
               </CardAction>
 
+              {BuildAppDialog && (
+                <CardAction
+                  label={`Build a standalone app for ${game.title}`}
+                  className="app-btn lib-act"
+                  onAct={() => setBuilding(game)}
+                >
+                  <Hammer className="size-3.5" aria-hidden />
+                </CardAction>
+              )}
+
               {/* Two steps rather than a confirm dialog: this removes files from
                   disk, and a misclick should not be one click away. */}
               <CardAction
@@ -313,6 +342,16 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
         ))}
         </div>
       </div>
+
+      {BuildAppDialog && building && (
+        <Suspense fallback={null}>
+          <BuildAppDialog
+            game={building}
+            playerVersion={import.meta.env.VITE_APP_VERSION ?? '0.0.0'}
+            onClose={() => setBuilding(null)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

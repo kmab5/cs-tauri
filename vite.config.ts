@@ -5,6 +5,13 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+
+/* One source of truth for the version, read at config time. The standalone
+   builder offers it as the default for the app it is about to build. */
+const pkg = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
+);
 
 export default defineConfig({
   // Tailwind v4 is a Vite plugin now: no postcss.config, no tailwind.config.
@@ -33,6 +40,8 @@ export default defineConfig({
       ignored: ['**/src-tauri/**'],
     },
   },
+
+  define: { 'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version) },
 
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
 

@@ -757,6 +757,27 @@ server.listen(PORT, async () => {
     await new Promise((r) => setTimeout(r, 350));
   }
 
+  console.log('\nthe dev-only builder is not in this build');
+  /*
+   * This is a build of dist/, i.e. a production bundle, so the standalone
+   * builder must be absent from it entirely — not merely unreachable. The first
+   * attempt at gating it shipped the command names and the dialog's strings,
+   * because a helper function is not something a bundler can fold and a static
+   * import survives a dead branch.
+   */
+  {
+    const assets = path.join(ROOT, 'assets');
+    const bundle = fs
+      .readdirSync(assets)
+      .filter((f) => f.endsWith('.js'))
+      .map((f) => fs.readFileSync(path.join(assets, f), 'utf8'))
+      .join('');
+    for (const needle of ['build_standalone', 'dev_info', 'BuildAppDialog']) {
+      ok(`"${needle}" is not in the production bundle`, !bundle.includes(needle));
+    }
+    ok('and no build control is rendered', !d.querySelector('[aria-label^="Build a standalone"]'));
+  }
+
   console.log('\nthe design system holds');
   const varOf = (name) => win.getComputedStyle(d.body).getPropertyValue(name).trim();
   ok('the spacing scale is declared', varOf('--app-2') === '8px', varOf('--app-2'));

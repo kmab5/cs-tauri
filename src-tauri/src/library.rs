@@ -362,13 +362,28 @@ fn add_dir(
 /// returned so the front end can say where it went.
 #[tauri::command]
 pub async fn export_game(app: AppHandle, id: String) -> Result<String, String> {
-    use std::io::Write;
+    write_archive(&app, &id, None, true)
+}
 
-    let dir = paths::game_dir(&app, &id)?;
+/// The archive writer behind `export_game`, also used by the standalone builder.
+///
+/// `include_saves` is the difference between the two callers. A reader exporting
+/// a game wants their progress to travel with it; a *build* of that game does
+/// not want the builder's own save file baked into every copy that ships.
+pub fn write_archive(
+    app: &AppHandle,
+    id: &str,
+    dest: Option<std::path::PathBuf>,
+    include_saves: bool,
+) -> Result<String, String> {
+    use std::io::Write;
+    let id = id.to_string();
+
+    let dir = paths::game_dir(app, &id)?;
     if !dir.exists() {
         return Err(format!("no game on disk for {id}"));
     }
-    let manifest = std::fs::read(paths::manifest_file(&app, &id)?)
+    let manifest = std::fs::read(paths::manifest_file(app, &id)?)
         .map_err(|e| format!("manifest: {e}"))?;
     let title = serde_json::from_slice::<serde_json::Value>(&manifest)
         .ok()
@@ -387,28 +402,45 @@ pub async fn export_game(app: AppHandle, id: String) -> Result<String, String> {
         .join("-")
         .to_lowercase();
 
-    let out_dir = app
-        .path()
-        .download_dir()
-        .or_else(|_| app.path().document_dir())
-        .map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
-    let target = out_dir.join(format!("{slug}.cszip"));
+    let target = match dest {
+        Some(path) => path,
+        None => {
+            let out_dir = app
+                .path()
+                .download_dir()
+                .or_else(|_| app.path().document_dir())
+                .map_err(|e| e.to_string())?;
+            std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+            out_dir.join(format!("{slug}.cszip"))
+        }
+    };
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
 
     let file = std::fs::File::create(&target).map_err(|e| format!("{}: {e}", target.display()))?;
     let mut zip = zip::ZipWriter::new(file);
     let options = zip::write::SimpleFileOptions::default();
 
     /* scenes/ and the assets, flattened back to the shape a game ships in. */
-    add_dir(&mut zip, &dir, &paths::scenes_dir(&app, &id)?, options)?;
-    add_dir(&mut zip, &paths::assets_dir(&app, &id)?, &paths::assets_dir(&app, &id)?, options)?;
+    add_dir(&mut zip, &dir, &paths::scenes_dir(app, &id)?, options)?;
+    add_dir(
+        &mut zip,
+        &paths::assets_dir(app, &id)?,
+        &paths::assets_dir(app, &id)?,
+        options,
+    )?;
 
     zip.start_file(format!("{PLAYER_DIR}manifest.json"), options)
         .map_err(|e| e.to_string())?;
     zip.write_all(&manifest).map_err(|e| e.to_string())?;
 
-    let store_file = paths::store_file(&app, &format!("CS-{id}"))?;
-    let saves = store::read_map(&store_file)?;
+    let store_file = paths::store_file(app, &format!("CS-{id}"))?;
+    let saves = if include_saves {
+        store::read_map(&store_file)?
+    } else {
+        store::Map::new()
+    };
     if !saves.is_empty() {
         zip.start_file(format!("{PLAYER_DIR}store.json"), options)
             .map_err(|e| e.to_string())?;

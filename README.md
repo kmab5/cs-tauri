@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.2.2` reads as **major release · major update · session**. `package.json` is
+`0.2.3` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -44,9 +44,9 @@ disagrees with either.
 Pushing a `v*` tag builds and publishes:
 
 ```bash
-npm version 0.2.3 --no-git-tag-version   # then update src-tauri/Cargo.toml
-git commit -am "release: v0.2.3"
-git tag v0.2.3 && git push --follow-tags
+npm version 0.2.4 --no-git-tag-version   # then update src-tauri/Cargo.toml
+git commit -am "release: v0.2.4"
+git tag v0.2.4 && git push --follow-tags
 ```
 
 `.github/workflows/release.yml` then runs the tests, builds the NSIS installer,
@@ -84,6 +84,20 @@ npm run cs:export -- --game sordwin.cszip --out dist-apps/sordwin \
 The product name, version and identifier come from the game — `*title` and
 `*author` out of its `startup.txt` — so the installer says *Sordwin: The
 Evertree Saga*, not *ChoiceScript Player*.
+
+### From the app, in development
+
+Run the app with `npm run tauri:dev` and every game on the shelf gains a hammer
+button: the same builder, with its flags as controls and its output streamed
+into the dialog. The game is staged as an archive **without your saves** first —
+they belong to your machine, not to every copy that ships.
+
+This is a development-only tool and it is gated twice. The interface is behind
+`import.meta.env.DEV` with the dialog as a dynamic import, so a production
+bundle does not contain it — `npm run test:webview` proves that by searching
+`dist/` for the command names. The Rust commands refuse independently under
+`cfg(debug_assertions)`, because the builder spawns a process against a path
+that only exists in a checkout.
 
 **Nothing is forked.** A standalone app is this app with one archive in
 `src-tauri/games/` and one extra resource, `standalone.json`. The mode is read
