@@ -279,6 +279,9 @@ pub struct AppMode {
     /// The game's title, for the window and the About box.
     pub title: Option<String>,
     pub author: Option<String>,
+    /// An authoring build: god mode and the trace console are on and cannot be
+    /// switched off from settings, because the build decided it.
+    pub author_mode: bool,
 }
 
 /// Whether this build ships a single game.
@@ -313,6 +316,10 @@ pub fn app_mode(app: AppHandle) -> AppMode {
         standalone: true,
         title: value.get("title").and_then(|v| v.as_str()).map(str::to_string),
         author: value.get("author").and_then(|v| v.as_str()).map(str::to_string),
+        author_mode: value
+            .get("authorMode")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
     }
 }
 

@@ -1549,3 +1549,223 @@ kbd,
     gap: var(--app-1);
   }
 }
+
+/* ------------------------------------------------------------- author mode */
+
+/*
+ * God mode. A table, because that is what it is: name on the left, value on
+ * the right, and the variable name always visible under the author's label —
+ * the label is what the sheet shows, the variable name is what `*if` reads, and
+ * an author debugging a condition needs the second one.
+ */
+.god-controls {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--app-1);
+  border-bottom: 1px solid var(--app-border);
+  padding: var(--app-2);
+}
+.god-tabs {
+  display: flex;
+  gap: var(--app-1);
+}
+.god-controls .app-input {
+  min-width: 0;
+  flex: 1;
+}
+
+.god-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--app-font-ui);
+}
+.god-table th {
+  padding: var(--app-1) var(--app-2) var(--app-1) 0;
+  text-align: left;
+  font-weight: 500;
+  vertical-align: middle;
+}
+.god-table td {
+  width: 6.5rem;
+  padding: var(--app-1) 0;
+}
+.god-table tr + tr th,
+.god-table tr + tr td {
+  border-top: 1px solid var(--app-border);
+}
+.god-name {
+  display: block;
+  font-size: var(--app-text-md);
+}
+.god-var {
+  display: block;
+  color: var(--app-label-dim);
+  font-family: var(--cs-font-mono, ui-monospace, monospace);
+  font-size: var(--app-text-xs);
+}
+.god-var em {
+  font-style: normal;
+  opacity: 0.7;
+}
+.god-value {
+  width: 100%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.god-bool {
+  width: 100%;
+  justify-content: center;
+}
+
+/*
+ * The trace console. A drawer under the story rather than a third column: a
+ * trace line is long and reads badly in 320px, and the reader's eye is already
+ * travelling down the page.
+ */
+.console {
+  display: flex;
+  height: clamp(9rem, 26vh, 20rem);
+  flex-shrink: 0;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--app-border);
+  background: var(--app-chrome);
+  font-family: var(--app-font-ui);
+}
+.console-head {
+  display: flex;
+  height: 28px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--app-1);
+  border-bottom: 1px solid var(--app-border);
+  padding: 0 var(--app-2);
+}
+.console-title {
+  color: var(--app-label-dim);
+  font-size: var(--app-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.console-filter {
+  font-size: var(--app-text-xs);
+}
+.console-count {
+  margin-left: auto;
+  color: var(--app-label-dim);
+  font-size: var(--app-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+.console-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--app-1) var(--app-2);
+  font-family: var(--cs-font-mono, ui-monospace, monospace);
+  font-size: var(--app-text-sm);
+  line-height: 1.55;
+}
+.console-empty {
+  margin: var(--app-3) 0;
+  color: var(--app-label-dim);
+  font-family: var(--app-font-ui);
+  font-size: var(--app-text-md);
+  text-align: center;
+}
+
+.console-line {
+  display: flex;
+  gap: var(--app-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.console-kind {
+  width: 4.25rem;
+  flex-shrink: 0;
+  color: var(--app-label-dim);
+  text-align: right;
+}
+.console-where {
+  width: 11rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  color: var(--app-label-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.console-detail {
+  color: var(--app-accent);
+}
+
+/*
+ * Colour carries the kind so a trace can be skimmed. Mixed from the reading
+ * theme's own ink and accent rather than hardcoded hues, so it stays legible in
+ * all six themes including Terminal, where a fixed palette would vanish.
+ */
+.console-line[data-kind='if'] .console-kind {
+  color: var(--app-accent);
+}
+.console-line[data-kind='if'] .console-detail {
+  color: var(--app-label);
+  font-weight: 600;
+}
+.console-line[data-kind='goto'] .console-kind,
+.console-line[data-kind='gosub'] .console-kind,
+.console-line[data-kind='return'] .console-kind,
+.console-line[data-kind='scene'] .console-kind {
+  color: var(--app-label);
+  font-weight: 600;
+}
+.console-line[data-kind='scene'] .console-text {
+  font-weight: 600;
+}
+.console-line[data-kind='choice'] .console-text,
+.console-line[data-kind='pick'] .console-text {
+  color: var(--app-accent);
+  font-weight: 600;
+}
+.console-line[data-kind='set'] .console-kind,
+.console-line[data-kind='create'] .console-kind,
+.console-line[data-kind='temp'] .console-kind {
+  color: color-mix(in srgb, var(--app-accent) 70%, var(--app-label));
+}
+.console-line[data-kind='error'] {
+  background: var(--app-accent-wash);
+}
+.console-line[data-kind='error'] .console-kind,
+.console-line[data-kind='error'] .console-text {
+  color: var(--app-accent);
+  font-weight: 600;
+}
+.console-line[data-kind='note'] {
+  color: var(--app-label-dim);
+  font-style: italic;
+}
+
+@media (max-width: 720px) {
+  .console-where {
+    display: none;
+  }
+}
+
+.build-field {
+  min-width: 0;
+}
+.build-error {
+  display: block;
+  margin-top: 2px;
+  color: var(--app-accent);
+  font-family: var(--app-font-ui);
+  font-size: var(--app-text-xs);
+}
+.build-row[data-invalid='true'] .app-input {
+  border-color: var(--app-accent);
+}
+.build-progress {
+  margin-top: var(--app-3);
+}
+.build-progress .app-meter {
+  margin-bottom: var(--app-1);
+}

@@ -14,6 +14,7 @@ import { useState } from 'react';
 
 import { DialogPanel } from '@/components/ui/dialog';
 import { THEMES, applyTheme, getTheme, getZoom, setTheme, setZoom } from '@/lib/theme';
+import { canToggleAuthorMode, isAuthorMode, setAuthorMode } from '@/lib/author/mode';
 import { cn } from '@/lib/utils';
 
 function Chips({
@@ -64,6 +65,7 @@ const ZOOMS = [
 export function AppSettings({ onClose }: { onClose: () => void }) {
   const [theme, setThemeState] = useState(getTheme);
   const [zoom, setZoomState] = useState(() => String(getZoom()));
+  const [author, setAuthorState] = useState(isAuthorMode);
 
   return (
     <DialogPanel open title="Settings" onOpenChange={(v) => !v && onClose()}>
@@ -87,10 +89,36 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
           setZoomState(id);
         }}
       />
+      {/* Absent in an exported story built without --author: which kind of
+          build it is was decided when it was built, and a published story
+          should not be switchable into god mode from a settings panel. */}
+      {canToggleAuthorMode() && (
+        <Chips
+          legend="Mode"
+          items={[
+            { id: 'reader', label: 'Reader' },
+            { id: 'author', label: 'Author', hint: 'god mode, trace console' },
+          ]}
+          current={author ? 'author' : 'reader'}
+          onPick={(id) => {
+            setAuthorMode(id === 'author');
+            setAuthorState(id === 'author');
+          }}
+        />
+      )}
+
       <p className="app-note">
         A running game has its own settings, with everything else in it. These two are the ones
         that make sense with no story open, and they carry over when you start one.
       </p>
+      {canToggleAuthorMode() && author && (
+        <p className="app-note mt-2">
+          Author mode adds god mode and the trace console to a running game, and
+          instruments the interpreter to record every <code className="font-mono">*if</code>,{' '}
+          <code className="font-mono">*goto</code> and <code className="font-mono">*set</code>.
+          Open a game to use them.
+        </p>
+      )}
     </DialogPanel>
   );
 }

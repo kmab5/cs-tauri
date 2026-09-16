@@ -14,6 +14,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
   BarChart3,
   Bookmark,
+  Bug,
+  Sparkles,
   Command as CommandIcon,
   Maximize2,
   Minimize2,
@@ -31,6 +33,10 @@ import { GamePanel } from './GamePanel';
 import { LibraryPage } from './LibraryPage';
 import { AchievementsPanel } from './AchievementsPanel';
 import { AppSettings } from './AppSettings';
+import { GodMode } from './author/GodMode';
+import { DebugConsole } from './author/DebugConsole';
+import { isAuthorMode } from '@/lib/author/mode';
+import { installInstrumentation, removeInstrumentation, trace } from '@/lib/author/instrument';
 import { Palette, keyHint, type Command } from './Palette';
 import { readScroll, saveScroll, useReadingKeys } from './useReadingKeys';
 import { useAutosave } from './useAutosave';
@@ -76,6 +82,25 @@ function ReadingKeys({ cs, gameId }: { cs: ChoiceScriptApi; gameId: string }) {
   });
 
   useAutosave(cs, state.history, state.canSave);
+
+  /* The picked option's *text* is only knowable here: the interpreter sees an
+     index, the front end has the label the reader actually read. */
+  useEffect(() => {
+    const pending = state.pending;
+    if (!pending || pending.kind !== 'choice') return;
+    trace(
+      'choice',
+      `${pending.options.length} option${pending.options.length === 1 ? '' : 's'} offered`,
+      pending.options
+        /* `name` is HTML: the engine has already expanded bbcode, so the tags
+           are stripped for a one-line trace rather than rendered into it. */
+        .map(
+          (o, i) =>
+            `${i + 1}. ${o.name.replace(/<[^>]*>/g, '')}${o.unselectable ? ' (locked)' : ''}`,
+        )
+        .join(' · '),
+    );
+  }, [state.history, state.pending]);
 
   /* The engine's settings dialog is the other way these change. Mirroring them
      back is what lets the library page match the game the reader just left. */
@@ -247,6 +272,12 @@ export function Shell({
   const [focus, setFocus] = useState(false);
   const [appSettings, setAppSettings] = useState(false);
   const [palette, setPalette] = useState(false);
+  /* Author mode: which of the two extra surfaces are open. Both are off by
+     default even in author mode — opening a story should still look like
+     reading one. */
+  const [panel, setPanel] = useState<'achievements' | 'god'>('achievements');
+  const [console_, setConsole] = useState(false);
+  const author = isAuthorMode();
   const [width, setWidth] = useState(() => {
     const stored = Number(localStorage.getItem(SIDEBAR.key));
     return Number.isFinite(stored) && stored >= SIDEBAR.min ? stored : 260;
@@ -310,6 +341,18 @@ export function Shell({
     void setGameMenuEnabled(!!game && !!cs);
   }, [game, cs]);
 
+  /* Instrumentation is installed only while author mode is on, and taken back
+     off when it is not: it wraps interpreter methods, and a reader should be
+     running the engine as it ships. */
+  useEffect(() => {
+    if (!cs || !author) {
+      removeInstrumentation();
+      return;
+    }
+    installInstrumentation();
+    return () => removeInstrumentation();
+  }, [cs, author]);
+
   /*
    * One registry, three surfaces: the palette runs the same handlers the menu
    * bar and the titlebar buttons do, so a command cannot work in one place and
@@ -348,6 +391,7 @@ export function Shell({
     'toggle-panel': () =>
       game && cs ? (wide ? setInspector((on) => !on) : cs.openAchievements()) : undefined,
     'toggle-focus': () => game && setFocus((on) => !on),
+    console: () => author && game && setConsole((v) => !v),
     library: () => (game && !standalone ? onExit() : undefined),
     /* On the library page Settings means the app's settings, not a running
        game's — there is no game to restart or save. */
@@ -408,6 +452,31 @@ export function Shell({
 
             {game && cs ? (
               <>
+                {author && (
+                  <>
+                    <button
+                      className="app-btn"
+                      aria-pressed={panel === 'god' && docked}
+                      aria-label="God mode"
+                      title="God mode — edit the stats"
+                      onClick={() => {
+                        setPanel('god');
+                        setInspector(panel !== 'god' || !inspector);
+                      }}
+                    >
+                      <Sparkles className="size-3.5" aria-hidden />
+                    </button>
+                    <button
+                      className="app-btn"
+                      aria-pressed={console_}
+                      aria-label="Trace console"
+                      title={`Trace console (${keyHint('mod+shift+d')})`}
+                      onClick={() => setConsole((v) => !v)}
+                    >
+                      <Bug className="size-3.5" aria-hidden />
+                    </button>
+                  </>
+                )}
                 <button
                   className="app-btn"
                   aria-pressed={focus}
@@ -420,8 +489,11 @@ export function Shell({
                 <GameControls
                   cs={cs}
                   wide={wide && !focus}
-                  panelOpen={docked}
-                  onTogglePanel={() => setInspector((on) => !on)}
+                  panelOpen={docked && panel === 'achievements'}
+                  onTogglePanel={() => {
+                    setPanel('achievements');
+                    setInspector(panel !== 'achievements' || !inspector);
+                  }}
                 />
               </>
             ) : (
@@ -443,12 +515,19 @@ export function Shell({
             <LibraryPage onPlay={onPlay} />
           )}
         </main>
+
+        {author && console_ && game && cs && <DebugConsole onClose={() => setConsole(false)} />}
       </div>
 
-      {docked && cs && (
+      {docked && cs && panel === 'achievements' && (
         <AchievementsPanel cs={cs} onClose={() => setInspector(false)}>
           <Resizer edge="right" label="Resize the achievements panel" onWidth={resizeRight} />
         </AchievementsPanel>
+      )}
+      {docked && cs && game && panel === 'god' && author && (
+        <GodMode cs={cs} gameId={game.id} onClose={() => setInspector(false)}>
+          <Resizer edge="right" label="Resize the god mode panel" onWidth={resizeRight} />
+        </GodMode>
       )}
 
       {/* Focus mode hides the titlebar, so this is the way out that does not

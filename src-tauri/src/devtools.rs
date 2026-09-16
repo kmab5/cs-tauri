@@ -33,6 +33,8 @@ pub struct BuildRequest {
     pub nsis: bool,
     pub msi: bool,
     pub icon: bool,
+    /// An authoring build: god mode and the trace console on, not switchable.
+    pub author: bool,
     pub skip_tests: bool,
     /// Overrides. Empty means "take it from the game".
     pub name: String,
@@ -138,6 +140,9 @@ async fn run_build(app: AppHandle, request: BuildRequest) -> Result<(), String> 
     }
     if request.icon {
         args.push("--icon".into());
+    }
+    if request.author {
+        args.push("--author".into());
     }
     if request.skip_tests {
         args.push("--skip-tests".into());

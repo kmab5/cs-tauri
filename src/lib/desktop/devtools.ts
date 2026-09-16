@@ -31,6 +31,8 @@ export interface BuildRequest {
   nsis: boolean;
   msi: boolean;
   icon: boolean;
+  /** An authoring build: god mode and the trace console baked on. */
+  author: boolean;
   skipTests: boolean;
   name: string;
   version: string;

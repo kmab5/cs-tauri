@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.2.5` reads as **major release · major update · session**. `package.json` is
+`0.3.0` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -44,9 +44,9 @@ disagrees with either.
 Pushing a `v*` tag builds and publishes:
 
 ```bash
-npm version 0.2.6 --no-git-tag-version   # then update src-tauri/Cargo.toml
-git commit -am "release: v0.2.6"
-git tag v0.2.6 && git push --follow-tags
+npm version 0.3.1 --no-git-tag-version   # then update src-tauri/Cargo.toml
+git commit -am "release: v0.3.1"
+git tag v0.3.1 && git push --follow-tags
 ```
 
 `.github/workflows/release.yml` then runs the tests, builds the NSIS installer,
@@ -342,6 +342,37 @@ together — to another machine, or into a backup.
 The saves are restored under the *new* import's id, so importing the same
 export twice gives two independent copies rather than two games writing to one
 save file.
+
+## Author mode
+
+Settings ▸ Mode ▸ Author, or `cs:export --author` for an exported story. It adds
+two surfaces to a running game and instruments the interpreter; a reader's
+install is untouched until they ask for it.
+
+**God mode** — the game's variables, editable, in two views. *Sheet* is the rows
+of `*stat_chart` in `choicescript_stats.txt` with the author's display label
+beside the variable name, in the author's order. *All* is every permanent
+variable and every temp, with the engine's own bookkeeping behind a toggle.
+Writes go into the interpreter's own objects and keep the representation it
+uses — ChoiceScript stores numbers as strings, so a numeric stat stays a
+numeric string, and refuses a non-numeric input rather than quietly turning
+`*if warmth > 50` into a string comparison.
+
+**The trace console** (`⌘⇧D`) — every decision the interpreter made, in order:
+which way each `*if` went, which label a `*goto` jumped to, which scene was
+entered or returned from, what each `*set` left behind, and which option was
+picked out of what. Colour carries the kind, drawn from the reading theme's own
+tokens so it stays legible in all six. Filters are subtractive and remembered.
+
+Both work by wrapping `Scene.prototype` **at runtime** rather than editing
+`engine/`, which is generated. The engine documents this pattern itself:
+`engine/core/stats.js` notes that `randomtest.js` overrides the same method, "so
+the pattern is sanctioned rather than a fork". Instrumentation is removed again
+when author mode is switched off.
+
+In a standalone build the mode is baked by the export flag and is **not** in
+settings: an exported story is either a release build or a testing build, and
+which one was decided when it was built.
 
 ## Why the stats screen is a dialog
 

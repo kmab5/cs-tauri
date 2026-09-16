@@ -246,7 +246,12 @@ function makeBridge(dataDir, archivePath, archiveBytes) {
   const commands = {
     app_mode: () =>
       standalone
-        ? { standalone: true, title: 'The Bundled Story', author: 'A. Tester' }
+        ? {
+            standalone: true,
+            title: 'The Bundled Story',
+            author: 'A. Tester',
+            authorMode,
+          }
         : { standalone: false },
     take_pending_archives: () => [],
     /* In a standalone build the game ships inside the app, so the first-run
@@ -392,6 +397,7 @@ function finish(code) {
 /* -------------------------------------------------------------------- run */
 
 const standalone = process.argv.includes('--standalone');
+const authorMode = process.argv.includes('--author');
 const arg = process.argv.slice(2).find((a) => !a.startsWith('--'));
 const archive = arg ? fs.readFileSync(arg) : makeZip(SAMPLE);
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cs-appdata-'));
@@ -490,6 +496,84 @@ server.listen(PORT, async () => {
         .call(d.querySelectorAll('aside[aria-label="This game"] button'))
         .some((b) => /Library/.test(b.textContent)));
     ok('the story is on screen', !!d.querySelector('.prose-cs'));
+
+    if (authorMode) {
+      console.log('\nauthor mode');
+      const godBtn = Array.prototype.slice
+        .call(d.querySelectorAll('.app-titlebar button'))
+        .find((b) => /God mode/.test(b.getAttribute('aria-label') || ''));
+      const bugBtn = Array.prototype.slice
+        .call(d.querySelectorAll('.app-titlebar button'))
+        .find((b) => /Trace console/.test(b.getAttribute('aria-label') || ''));
+      ok('god mode has a control', !!godBtn);
+      ok('the trace console has a control', !!bugBtn);
+      ok('the interpreter is instrumented', typeof win.Scene === 'function');
+
+      if (bugBtn) {
+        bugBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 400));
+        ok('the console opens', !!d.querySelector('section[aria-label="Debug console"]'));
+        const lines = d.querySelectorAll('.console-line');
+        ok('it traced the interpreter loading the game', lines.length > 0,
+          lines.length + ' lines');
+
+        /* The opening screen is a *page_break, so the story has to be advanced
+           one screen before there is a *choice to trace at all. */
+        const next = Array.prototype.slice
+          .call(d.querySelectorAll('button'))
+          .find((b) => /^(Next|Continue)/.test(b.textContent.trim()));
+        if (next) {
+          next.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+          await new Promise((r) => setTimeout(r, 800));
+        }
+        const traced = d.querySelector('.console-body')?.textContent || '';
+        ok('choices are traced with their text', /option/.test(traced),
+          traced.slice(-120));
+        ok('and variable writes with their value', /\*create warmth/.test(traced));
+      }
+
+      if (godBtn) {
+        godBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 500));
+        ok('god mode opens as a panel', !!d.querySelector('aside[aria-label="God mode"]'));
+        const rows = d.querySelectorAll('.god-table tr');
+        ok('it lists the variables', rows.length > 0, rows.length + ' rows');
+        ok('each row shows the variable name as well as the label',
+          !!d.querySelector('.god-var'), d.querySelector('.god-var')?.textContent);
+        /* warmth is declared *create warmth 40 in the fixture. */
+        const field = Array.prototype.slice
+          .call(d.querySelectorAll('.god-table tr'))
+          .find((r) => /warmth/.test(r.textContent))
+          ?.querySelector('input');
+        ok('a stat is editable', !!field);
+        if (field) {
+          const setValue = Object.getOwnPropertyDescriptor(
+            win.HTMLInputElement.prototype,
+            'value',
+          ).set;
+          setValue.call(field, '99');
+          field.dispatchEvent(new win.Event('input', { bubbles: true }));
+          /* React maps onBlur to focusout, which bubbles; a plain 'blur' event
+             never reaches its root listener. */
+          field.dispatchEvent(new win.FocusEvent('focusout', { bubbles: true }));
+          await new Promise((r) => setTimeout(r, 300));
+          ok('editing it writes through to the interpreter',
+            Number(win.stats.warmth) === 99, String(win.stats && win.stats.warmth));
+          /* ChoiceScript stores numbers as strings, so the assertion is that
+             the representation the interpreter uses is preserved — not that it
+             becomes a JS number. */
+          ok('and it keeps the engine\'s own representation',
+            typeof win.stats.warmth === typeof 'string',
+            typeof (win.stats && win.stats.warmth));
+        }
+      }
+    } else {
+      console.log('\nauthor mode is off by default');
+      ok('no god mode control', !Array.prototype.slice
+        .call(d.querySelectorAll('.app-titlebar button'))
+        .some((b) => /God mode/.test(b.getAttribute('aria-label') || '')));
+      ok('no trace console', !d.querySelector('section[aria-label="Debug console"]'));
+    }
 
     const palBtn = Array.prototype.slice
       .call(d.querySelectorAll('.app-titlebar button'))
@@ -833,8 +917,28 @@ server.listen(PORT, async () => {
   win.ChoiceScript.openStats();
   await new Promise((r) => setTimeout(r, 400));
   ok('the stats screen opens', !!d.querySelector('[role=dialog]'), win.ChoiceScript.getState().overlay);
-  ok('stat bars render as meters', d.querySelectorAll('[role=meter]').length > 0,
-    d.querySelectorAll('[role=meter]').length + ' meters');
+  /*
+   * Only a game whose stats screen actually uses *stat_chart renders meters.
+   * Sordwin draws its sheet with *script and its own DOM, which is a legitimate
+   * thing for a game to do — and the previous version of this failed the whole
+   * export because of it. The engine contract that matters here is that a
+   * stat_chart *becomes* a meter, so the assertion is made only when the game
+   * has one.
+   */
+  {
+    const scenes = fs.existsSync(path.join(gameDir, 'scenes'))
+      ? fs.readdirSync(path.join(gameDir, 'scenes'))
+      : [];
+    const statsScene = scenes.find((f) => /^choicescript_stats\.txt$/i.test(f));
+    const usesStatChart =
+      !!statsScene &&
+      /^\s*\*stat_chart\b/im.test(
+        fs.readFileSync(path.join(gameDir, 'scenes', statsScene), 'utf8'),
+      );
+    const meters = d.querySelectorAll('[role=meter]').length;
+    if (usesStatChart) ok('stat bars render as meters', meters > 0, meters + ' meters');
+    else skip('stat bars render as meters', 'this game draws its own stat sheet');
+  }
 
   finish(fail ? 1 : 0);
 });

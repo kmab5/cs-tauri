@@ -33,6 +33,7 @@
  *   --name <string>    override the product name
  *   --version <semver> override the app version
  *   --identifier <id>  override the bundle identifier
+ *   --author           an authoring build: god mode and the trace console on
  *   --icon             derive the app icon from the game's cover art
  *   --skip-tests       build without the test pass   (say why in the commit)
  *   --keep             leave the staged tree in place, for debugging
@@ -87,7 +88,15 @@ function resolveBin(pkg, bin) {
 /* ----------------------------------------------------------------- arguments */
 
 function parseArgs(argv) {
-  const flags = { portable: false, nsis: false, msi: false, icon: false, skipTests: false, keep: false };
+  const flags = {
+    portable: false,
+    nsis: false,
+    msi: false,
+    icon: false,
+    author: false,
+    skipTests: false,
+    keep: false,
+  };
   const opts = {};
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -98,6 +107,7 @@ function parseArgs(argv) {
       case 'nsis':
       case 'msi':
       case 'icon':
+      case 'author':
       case 'keep':
         flags[key] = true;
         break;
@@ -124,7 +134,9 @@ function parseArgs(argv) {
 function usage(message) {
   console.error(`\n${message}\n`);
   console.error('  npm run cs:export -- --game <archive.cszip> --out <dir> [--portable] [--nsis] [--msi]\n');
-  console.error('  Optional: --name, --version, --identifier, --icon, --skip-tests, --keep\n');
+  console.error(
+    '  Optional: --name, --version, --identifier, --icon, --author, --skip-tests, --keep\n',
+  );
   process.exit(1);
 }
 
@@ -224,8 +236,22 @@ const slugify = (s) =>
 
 /* ------------------------------------------------------------------- running */
 
+/*
+ * Steps are numbered on stdout — `▸ [3/7] compiling` — for two readers at once:
+ * a person watching a terminal, and the GUI, which parses the counter to show
+ * progress. A build takes minutes; "something is happening" is not enough.
+ */
+let step = 0;
+let steps = 0;
+
+function plan(n) {
+  steps = n;
+  step = 0;
+}
+
 function run(command, args, label) {
-  process.stdout.write(`\n▸ ${label}\n`);
+  step += 1;
+  process.stdout.write(`\n▸ [${step}/${steps}] ${label}\n`);
   try {
     execFileSync(command, args, { cwd: ROOT, stdio: 'inherit' });
   } catch (e) {
@@ -303,6 +329,8 @@ console.log(`  v${version} · ${identifier}`);
 console.log(`  building: ${wanted.join(', ')}\n`);
 
 let staged = false;
+/* Six test steps, the icon, the compile, and the collection. */
+plan((flags.skipTests ? 0 : 6) + (flags.icon ? 1 : 0) + 1);
 /** Set by --icon: the per-game icon directory, relative to src-tauri. */
 let iconOverride = null;
 
@@ -347,7 +375,19 @@ try {
 
   writeFileSync(
     MARKER,
-    JSON.stringify({ standalone: true, title: name, author: game.author, game: slug }, null, 2),
+    JSON.stringify(
+      {
+        standalone: true,
+        title: name,
+        author: game.author,
+        game: slug,
+        /* Baked, not a setting: an exported story is either a release build or
+           a testing build, and which one was decided here. */
+        authorMode: flags.author,
+      },
+      null,
+      2,
+    ),
   );
 
   /* ---- test ------------------------------------------------------------- */
@@ -545,6 +585,7 @@ try {
     ),
   );
 
+  process.stdout.write(`\n▸ [${steps}/${steps}] done\n`);
   console.log(`\n✓ ${name} v${version}\n`);
   for (const a of artefacts) console.log(`  ${a}`);
   console.log(`\n  manifest: ${join(outDir, 'BUILD.json')}\n`);

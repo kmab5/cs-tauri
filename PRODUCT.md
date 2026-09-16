@@ -85,6 +85,17 @@ step, and it will call the same code path.
 This is why the library/standalone distinction is a runtime fact rather than a
 build flag: one codebase, one binary, two modes, both tested.
 
+## Author mode
+
+The secondary audience — ChoiceScript authors testing their own work — gets god
+mode and a trace console, on a setting. That does not soften the primary
+register: a reader's install shows none of it until they ask, and an exported
+story only has it if it was built that way.
+
+The line held here is that authoring tools observe the engine rather than
+changing it. Instrumentation wraps `Scene.prototype` at runtime and is removed
+when the mode is off; `engine/` stays generated and untouched.
+
 ## Open questions
 
 - Is the shelf's poster grid right, or should the library default to a dense

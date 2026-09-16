@@ -16,6 +16,11 @@ export interface AppMode {
   standalone: boolean;
   title?: string;
   author?: string;
+  /**
+   * Set by `cs:export --author`: this build *is* an authoring build and says
+   * so, rather than leaving it to a setting a reader could flip.
+   */
+  authorMode?: boolean;
 }
 
 const LIBRARY: AppMode = { standalone: false };

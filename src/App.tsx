@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { getTheme, getZoom } from '@/lib/theme';
 import { loadMode, type AppMode } from '@/lib/mode';
 import { setWindowTitle } from '@/lib/desktop/title';
+import { setBakedAuthorMode } from '@/lib/author/mode';
 import { importBundled, listGames } from '@/lib/library';
 
 export default function App() {
@@ -53,6 +54,9 @@ export default function App() {
     let live = true;
     void loadMode().then(async (m) => {
       if (!live) return;
+      /* A standalone build states which kind it is; a library build leaves it
+         to the setting. */
+      setBakedAuthorMode(m.standalone ? m.authorMode === true : undefined);
       setMode(m);
       if (!m.standalone) return;
       /* Named from the marker the exporter wrote, before the engine has even

@@ -5,6 +5,133 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 16 — v0.3.0, author mode
+
+Three of the four author-mode features are in. The fourth — quick and random
+tests — is deferred on purpose, with a plan, at the bottom.
+
+### The key finding: the interpreter can be traced without touching it
+
+`engine/` is generated, so editing it is off the table. But the engine documents
+the way in itself: `engine/core/stats.js` says of its own
+`Scene.prototype.stat_chart` override that "randomtest.js already overrides this
+same method, so the pattern is sanctioned rather than a fork".
+
+So author mode wraps `Scene.prototype` **at runtime** — `if`, `goto`, `gosub`,
+`return`, `goto_scene`, `choice`, `set`, `create`, `temp` — keeping the
+originals and restoring them when the mode is switched off. That makes real
+tracing possible with no engine change at all.
+
+Two things this also turned up, both in `engine/scene.js`:
+
+- The engine already has a `debugMode` that prints `*if` results through
+  `println` — straight into the story text. The intent was there; the surface
+  was not.
+- Variables live in the global `stats` object and temps in `stats.scene.temps`
+  (`:29`, `:72`). Both are plain objects, which is what makes god mode possible
+  without an API for it.
+
+**One honest caveat, recorded in the code too:** `*if` conditions are
+re-evaluated to learn their result, because the engine's `if` returns nothing and
+communicates through `this.indent`. ChoiceScript conditions are expressions, so
+evaluating one twice does not change the story — but a condition calling
+something with side effects would be counted twice, and an evaluation that
+throws is recorded as `unknown` rather than being allowed to break the game.
+
+### God mode
+
+Two views, as asked. **Sheet** is the `*stat_chart` rows from
+`choicescript_stats.txt`, parsed off disk, showing the author's display label
+*and* the variable name — the label is what the sheet shows, the variable name
+is what `*if` reads, and an author debugging a condition needs the second one.
+**All** is every variable and temp, with engine bookkeeping behind a toggle,
+because a list containing `choice_reuse` and `_looplimit` buries the ten that
+matter.
+
+### A real bug, found by a test asserting the wrong thing
+
+I wrote the harness expecting `stats.warmth` to become the number `99`. It
+stayed the string `"40"` — and the reason is that **ChoiceScript stores numbers
+as strings**: `*create warmth 40` leaves `"40"`, because `tokenizeExpr` hands
+back the literal and the comparison operators coerce.
+
+That made my "preserve the type" logic wrong in a subtle way: it preserved
+string-ness, which is correct, but it would also have accepted `"abc"` into a
+numeric stat and silently turned `*if warmth > 50` into a string comparison. It
+now recognises a numeric string as numeric, writes back in the engine's own
+representation, and rejects non-numeric input. The assertion was wrong; the code
+was wronger.
+
+### The trace console
+
+A drawer under the story, not a third column: trace lines are long and read
+badly at 320px. Colour carries the kind and is mixed from the reading theme's
+own tokens rather than hardcoded, so it survives Terminal and Nocturne alike.
+Filters are subtractive, remembered, and grouped — an `*if`-heavy game emits
+hundreds of lines a screen and the useful view is usually "everything except the
+`*if`s".
+
+Choices are traced from the front end rather than the interpreter, because the
+interpreter sees an index and the front end has the label the reader actually
+read, including which options were locked.
+
+### Your three bugs
+
+**Sordwin failed on "rendering bars".** That assertion counts `[role=meter]`
+after opening the stats screen — but Sordwin draws its sheet with `*script` and
+its own DOM, which is a legitimate thing for a game to do. The engine contract
+that matters is that a `*stat_chart` *becomes* a meter, so the assertion now
+runs only when the game's stats scene actually contains one, and skips with a
+reason otherwise. Same shape as the stats-choice assertion two sessions ago.
+
+**Export validation waited for the button.** Now checked as you type, per field,
+in place. The rules are the installers', not mine: a Windows product name
+becomes a folder name so `: / \ < > " | ? *` are out, MSI and NSIS both want
+three numeric version parts, and an identifier is reverse-DNS with no `.app`
+suffix. Build is disabled while anything is invalid.
+
+**No progress in the GUI.** The CLI now numbers its own steps —
+`▸ [3/8] compiling` — for two readers at once: a person watching a terminal, and
+the dialog, which parses the counter into a progress bar and a "step 3 of 8 —
+compiling" line. Parsing its human output beat inventing a second protocol.
+
+### Mode switching
+
+Settings ▸ Mode in the library build. In a standalone build the flag is **baked**
+by `cs:export --author` and the setting is absent — an exported story is either
+a release build or a testing build, and a reader should not be able to flip a
+published story into god mode. There is an "Author build" checkbox in the build
+dialog.
+
+### Deferred: quick and random tests
+
+Not started, and the reason is worth stating rather than hiding. This engine
+ships **no** quicktest or randomtest — only references to them in comments — so
+this is not wiring up an existing runner, it is writing one: a driver that
+restarts the game, answers pending choices by policy, detects `*finish` and
+error blocks, guards against infinite loops (the engine's own `_looplimit` is
+per-label, not per-run), and reports coverage.
+
+That is a session's work on its own, and half of it would be worse than none —
+a test runner that reports a false pass is actively harmful. The driver is the
+same shape as the harness's play loop, so the groundwork exists.
+
+### Verified
+
+- `npm run test:author` — **29 passed, 0 failed** (new pass: god mode opens,
+  lists variables, shows both names, edits write through to the interpreter and
+  keep its representation; the console opens, traces the load, then traces a
+  choice with its option text and a `*create` with its value)
+- `npm run test:standalone` — 18 passed, 0 failed (two new: no god mode and no
+  console when author mode is off)
+- `npm run test:webview` — 80 passed, 0 failed
+- `npm run test:game` — **75 passed, 0 failed** on Choice of Magics
+- theme-scope, register, stale, version, detector — pass
+
+`npm test` now runs five passes.
+
+---
+
 ## 2026-09-08 · Session 15 — v0.2.5, the startup panic
 
 ```

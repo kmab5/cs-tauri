@@ -1,7 +1,7 @@
 {
   "name": "cs-tauri",
   "private": true,
-  "version": "0.2.5",
+  "version": "0.3.0",
   "type": "module",
   "description": "A ChoiceScript player for the desktop. Games and saves stay on your own machine.",
   "scripts": {
@@ -14,14 +14,15 @@
     "tauri:build": "tauri build",
     "cs:export": "node scripts/cs-export.mjs",
     "fmt:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml",
-    "test": "npm run build && npm run test:version && npm run test:theme && npm run test:register && npm run test:webview && npm run test:standalone && npm run test:rust",
+    "test": "npm run build && npm run test:version && npm run test:theme && npm run test:register && npm run test:webview && npm run test:standalone && npm run test:author && npm run test:rust",
     "test:version": "node scripts/check-version.mjs",
     "test:theme": "node check-theme-scope.cjs",
     "test:register": "node scripts/check-register.mjs",
     "test:webview": "node scripts/test-webview.cjs",
     "test:game": "node scripts/test-webview.cjs src-tauri/games/choice-of-magics.cszip",
     "test:rust": "cd src-tauri && cargo test",
-    "test:standalone": "node scripts/test-webview.cjs --standalone"
+    "test:standalone": "node scripts/test-webview.cjs --standalone",
+    "test:author": "node scripts/test-webview.cjs --standalone --author"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",
