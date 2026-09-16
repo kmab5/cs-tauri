@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.2.3` reads as **major release · major update · session**. `package.json` is
+`0.2.5` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -44,9 +44,9 @@ disagrees with either.
 Pushing a `v*` tag builds and publishes:
 
 ```bash
-npm version 0.2.4 --no-git-tag-version   # then update src-tauri/Cargo.toml
-git commit -am "release: v0.2.4"
-git tag v0.2.4 && git push --follow-tags
+npm version 0.2.6 --no-git-tag-version   # then update src-tauri/Cargo.toml
+git commit -am "release: v0.2.6"
+git tag v0.2.6 && git push --follow-tags
 ```
 
 `.github/workflows/release.yml` then runs the tests, builds the NSIS installer,

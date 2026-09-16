@@ -26,9 +26,22 @@ const cargo = read('src-tauri/Cargo.toml').match(/^version\s*=\s*"([^"]+)"/m)?.[
 
 const conf = JSON.parse(read('src-tauri/tauri.conf.json'));
 
+/* The crate's own entry in Cargo.lock. Cargo rewrites it on the next build, so
+   a stale value is harmless — but it had drifted four releases behind without
+   anything noticing, and a version this file claims to police should be
+   policed. */
+const cargoName = read('src-tauri/Cargo.toml').match(/^name\s*=\s*"([^"]+)"/m)?.[1];
+const lock = read('src-tauri/Cargo.lock');
+const locked = cargoName
+  ? new RegExp(`name = "${cargoName}"\\nversion = "([^"]+)"`).exec(lock)?.[1]
+  : undefined;
+
 const problems = [];
 if (!pkg) problems.push('package.json has no version');
 if (cargo !== pkg) problems.push(`src-tauri/Cargo.toml is ${cargo}, package.json is ${pkg}`);
+if (locked && locked !== pkg) {
+  problems.push(`src-tauri/Cargo.lock records ${cargoName} ${locked}, package.json is ${pkg}`);
+}
 if (conf.version) {
   problems.push(
     `src-tauri/tauri.conf.json pins version ${conf.version}; remove the key so it follows package.json`,

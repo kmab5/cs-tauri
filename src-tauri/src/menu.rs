@@ -20,7 +20,7 @@ use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
    it unconditionally warns on every Windows and Linux build. */
 #[cfg(target_os = "macos")]
 use tauri::menu::AboutMetadata;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Runtime};
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     /* A standalone build has one game and no shelf. Those items are omitted,

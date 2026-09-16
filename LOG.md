@@ -5,6 +5,87 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 15 — v0.2.5, the startup panic
+
+```
+panicked at tauri-2.11.5/src/lib.rs:734:
+state() called before manage() for tauri::path::PathResolver
+```
+
+Mine, and a plain ordering mistake. `Builder::menu`'s closure runs while the app
+is still being assembled — before any plugin or managed state exists — and last
+session I put `is_standalone()` inside it, which asks the **path resolver**
+where the resources are. The resolver is not there yet, so it panicked before
+the window ever opened.
+
+The menu is now built in `setup`, where every plugin and every piece of state is
+in place, which is what that hook is for:
+
+```rust
+let menu = menu::build(&app.handle().clone())?;
+app.handle().set_menu(menu)?;
+```
+
+### Verified against the actual crate source rather than assumed
+
+Two things could have made this a second failed startup, so I downloaded
+`tauri-2.11.5` and `muda-0.19.3` from crates.io and checked:
+
+1. **`set_menu` on an `AppHandle`.** It is in `shared_app_impl!`, applied to
+   both `App<R>` and `AppHandle<R>` under `#[cfg(desktop)]` — and on non-macOS
+   it walks existing windows and attaches the menu to any that do not have one.
+   So building the menu *after* the window exists is fine, which was the thing
+   worth confirming before moving it.
+2. **Every accelerator string parses.** The menu had never got as far as being
+   constructed, so all fourteen were still untested, and one unparseable string
+   fails the whole menu. `muda`'s table takes `"BACKSLASH"`, `"COMMA"`,
+   `"DIGIT0"`, `"EQUAL"`, `"MINUS"` and single letters via `"KEYx" | "x"`, and
+   `"CMDORCTRL"` is a recognised modifier. All fourteen are good.
+
+One behavioural consequence worth knowing: a bad menu is now a startup *error*
+rather than a panic, because `setup` returns `Result`. The message will name the
+item.
+
+Also fixed the warning from the same build: `Manager` was unused in `menu.rs`
+after `set_library_menu_enabled` was deleted.
+
+### Two things in your log that are not this bug
+
+**The Vite deprecation warnings are back**, naming the `vite:react-babel`
+plugin. That is `@vitejs/plugin-react` **v4** — the version whose missing Vite 8
+peer range broke `npm install` three sessions ago. `package.json` and
+`package-lock.json` both say 6.1.1 here, so your `node_modules` is stale:
+
+```bash
+npm install
+```
+
+**Your `Cargo.lock` had drifted four releases behind.** `Cargo.toml` said 0.2.4
+while the lock still recorded `cs-tauri 0.1.8`. Cargo rewrites it on the next
+build so nothing broke, but `check-version.mjs` is the file whose whole job is
+noticing this, and it was not looking. It now checks the lock's own entry for
+the crate too, reading the crate name from `Cargo.toml` rather than assuming it
+— you renamed the crate from `choicescript` to `cs-tauri` and my scripts had not
+noticed that either.
+
+Versions are 0.2.5 across `package.json`, `Cargo.toml` and `Cargo.lock`. I
+skipped 0.2.4 rather than reusing the number you had already shipped.
+
+### Verified
+
+- `npm run test:webview` — 80 passed, 0 failed
+- `npm run test:standalone` — 16 passed, 0 failed
+- theme-scope, register, stale, version — pass
+
+### What is still unrun
+
+The app actually starting. Everything above is either checked against crate
+source or covered by the harness, but `devtools.rs` has never compiled and the
+menu has never been constructed at runtime. If the build gets past those two,
+the hammer button on each shelf card is the thing to try.
+
+---
+
 ## 2026-09-08 · Session 14 — v0.2.3, the builder as a GUI (development only)
 
 Every game on the shelf now has a hammer button in a dev instance. It opens a

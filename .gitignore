@@ -76,3 +76,5 @@ dist-apps/
 # The cs:export inbox. Keep the README, never the games.
 stories/*
 !stories/README.md
+
+docs/superpowers/*

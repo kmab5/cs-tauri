@@ -74,7 +74,7 @@ pub fn run() {
 
     let app = builder
         .plugin(tauri_plugin_opener::init())
-        .menu(menu::build)
+        // No `.menu(...)` here on purpose: see the setup hook below.
         // Menu items act in the webview, where the engine is. Rust only owns
         // the shape of the menu and its accelerators.
         .on_menu_event(|app, event| {
@@ -105,6 +105,22 @@ pub fn run() {
         ])
         .setup(|app| {
             paths::ensure_dirs(&app.handle().clone())?;
+
+            /*
+             * The menu is built here rather than through `Builder::menu`.
+             *
+             * That closure runs while the app is still being assembled, before
+             * the path resolver has been managed — and deciding whether this is
+             * a standalone build means resolving a resource path. Calling it
+             * there panics on startup with "state() called before manage() for
+             * PathResolver", which is exactly what it did.
+             *
+             * By the time setup runs, every plugin and every piece of managed
+             * state is in place, which is the whole point of the hook.
+             */
+            let menu = menu::build(&app.handle().clone())?;
+            app.handle().set_menu(menu)?;
+
             for path in archives_from_args(std::env::args()) {
                 queue_archive(&app.handle().clone(), path);
             }
