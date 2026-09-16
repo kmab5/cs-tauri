@@ -5,6 +5,94 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 12 — v0.2.1, the export command on a real machine
+
+Your run got four steps in and died on the first spawn. Fixed, plus three more
+things the run exposed — two of which would have cost you something.
+
+### `spawnSync npm.cmd EINVAL`
+
+Node's fix for CVE-2024-27980 made `child_process` refuse to spawn a `.cmd` or
+`.bat` without `shell: true`. On Windows `npm` *is* `npm.cmd`, so every step in
+the script was going to fail on Node 24. It never came up here because this
+container is Linux, where `npm` is a real executable.
+
+Turning the shell on was the wrong fix: paths in this command come from you, and
+hand-quoting user paths through `cmd.exe` is how quoting bugs are born. So the
+script no longer goes through npm at all. Each step resolves the package's own
+JS entry point out of its `package.json` `bin` field and runs it on
+`process.execPath`:
+
+| Step | Now runs |
+| --- | --- |
+| `npm run build` | `node scripts/check-stale.mjs`, `node scripts/build-engine.mjs`, `node …/typescript/bin/tsc -b`, `node …/vite/bin/vite.js build` |
+| guards | `node check-theme-scope.cjs`, `node scripts/check-register.mjs` |
+| harness | `node scripts/test-webview.cjs <your archive>` |
+| standalone | `node scripts/test-webview.cjs <your archive> --standalone` |
+| rust | `cargo test --manifest-path src-tauri/Cargo.toml` |
+| build | `node …/@tauri-apps/cli/tauri.js build --config …` |
+
+No shell, no `.cmd`, no quoting, and one fewer process per step. `cargo` is a
+real executable everywhere, so it needs none of this — only an explicit
+manifest path, since there is no shell to `cd` with.
+
+`ENOENT` now reports as *"rust: could not run cargo — is it on PATH?"* rather
+than a spawn stack trace.
+
+### `--icon` was going to overwrite your icon set
+
+`tauri icon` rewrites `src-tauri/icons/` **in place**. My restore covered the
+games folder and the two config files and not the icons — so one `--icon` build
+would have replaced the library app's custom icon with a game's cover art,
+permanently, and the next ordinary build would have shipped it. The icon set is
+stashed and restored with everything else now, and restored again if the tool
+fails halfway. Verified with `git status`: byte-for-byte identical afterwards.
+
+### `--icon` was also going to refuse a perfectly good cover
+
+Choice of Magics ships **two** covers: `icon.jpg` at 1024×1024 and `icon.png`
+at 192×192. My finder took whichever came first in the archive. Whichever it
+took, the answer was wrong — the PNG is far too small, and I had just added a
+pre-check that would have rejected the JPEG for not being a PNG.
+
+It now measures every candidate from its own file header — PNG's IHDR, JPEG's
+first SOF marker — and picks square first, then largest, then PNG on ties. It
+prints what it chose:
+
+```
+  icon source: choice-of-magic/icon.jpg (JPEG 1024×1024)
+```
+
+And `tauri icon` **accepted the JPEG**, generating the whole set — ICNS, ICO,
+every PNG size, the ten Appx logos. So the pre-check now only rejects what is
+genuinely unusable: unreadable, non-square, or under 1024px. A 192px cover is
+not upscaled, because that would look worse than the app's own icon.
+
+### Verified here
+
+Every step of `cs:export` ran except the compile itself, which needs cargo:
+staging, the marker, the config overlay, all five test steps against your actual
+archive (68 passed for the game, 15 for the standalone interface), the icon
+derivation, and restore — confirmed clean by `git status` on `src-tauri/icons`
+and `src-tauri/games`.
+
+- `npm run test:webview` — 73 passed, 0 failed
+- `npm run test:standalone` — 15 passed, 0 failed
+- build, typecheck, theme-scope, register, stale, version — pass
+
+### Try again
+
+```bash
+npm run cs:export -- --game choice-of-magics.cszip --out dist-apps/choice-of-magics \
+  --portable --nsis --icon
+```
+
+It should now get as far as cargo. If the compile fails it will be one of the
+uncompiled Rust bits from the last few sessions — `app_mode`,
+`set_library_menu_enabled` or `export_game` — and each is a single function.
+
+---
+
 ## 2026-09-08 · Session 11 — v0.2.0, one game as its own app
 
 ### The shape of it

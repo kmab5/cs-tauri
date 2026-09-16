@@ -59,9 +59,29 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GAMES = join(ROOT, 'src-tauri', 'games');
 const STASH = join(ROOT, 'src-tauri', '.games-stash');
 const MARKER = join(ROOT, 'src-tauri', 'standalone.json');
+const ICONS = join(ROOT, 'src-tauri', 'icons');
+const ICONS_STASH = join(ROOT, 'src-tauri', '.icons-stash');
 const CONFIG = join(ROOT, 'src-tauri', 'tauri.standalone.conf.json');
 
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+/**
+ * Everything is spawned as `node <script>`, never through npm.
+ *
+ * On Windows `npm` is `npm.cmd`, and since the fix for CVE-2024-27980 Node
+ * refuses to spawn a `.cmd` or `.bat` without `shell: true` — `spawnSync
+ * npm.cmd EINVAL`, which is exactly what this hit on Node 24. Turning the shell
+ * on instead would mean hand-quoting every path, and paths here come from the
+ * user.
+ *
+ * So each step resolves the package's own JS entry point out of its
+ * `package.json` `bin` field and runs it on `process.execPath`. No shell, no
+ * `.cmd`, no quoting, and one less process per step.
+ */
+function resolveBin(pkg, bin) {
+  const manifest = JSON.parse(readFileSync(join(ROOT, 'node_modules', pkg, 'package.json'), 'utf8'));
+  const entry = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.[bin];
+  if (!entry) throw new Error(`${pkg} has no "${bin}" entry point — is it installed?`);
+  return join(ROOT, 'node_modules', pkg, entry);
+}
 
 /* ----------------------------------------------------------------- arguments */
 
@@ -159,9 +179,40 @@ function inspect(bytes, archivePath) {
   const author = (/^\s*\*author\s+(.+)$/im.exec(text)?.[1] ?? '').trim();
 
   const root = startup.name.replace(/scenes\/startup\.txt$/i, '');
-  const cover = entries.find((e) => new RegExp(`^${root}icon\\.(png|jpe?g)$`, 'i').test(e.name));
+  /* Plural: Choice of Magics ships icon.jpg at 1024² *and* icon.png at 192².
+     Taking whichever came first in the archive would have thrown away the only
+     usable one. */
+  const covers = entries.filter((e) =>
+    new RegExp(`^${root}icon\\.(png|jpe?g)$`, 'i').test(e.name),
+  );
 
-  return { title, author, scenes, cover };
+  return { title, author, scenes, covers };
+}
+
+/**
+ * Format and dimensions from the file's own header — PNG's IHDR, or JPEG's
+ * first SOF marker. Enough to say *why* a cover is unusable before handing it
+ * to a tool that will only say it is.
+ */
+function imageSize(buf) {
+  if (buf.length > 24 && buf.readUInt32BE(0) === 0x89504e47) {
+    return { type: 'png', w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+  }
+  if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let at = 2;
+    while (at + 9 < buf.length) {
+      if (buf[at] !== 0xff) break;
+      const marker = buf[at + 1];
+      const length = buf.readUInt16BE(at + 2);
+      /* SOF0..SOF15, skipping the four that are not frame headers. */
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc, 0xd8].includes(marker)) {
+        return { type: 'jpeg', h: buf.readUInt16BE(at + 5), w: buf.readUInt16BE(at + 7) };
+      }
+      at += 2 + length;
+    }
+    return { type: 'jpeg', w: 0, h: 0 };
+  }
+  return null;
 }
 
 const slugify = (s) =>
@@ -174,8 +225,21 @@ const slugify = (s) =>
 
 function run(command, args, label) {
   process.stdout.write(`\n▸ ${label}\n`);
-  execFileSync(command, args, { cwd: ROOT, stdio: 'inherit' });
+  try {
+    execFileSync(command, args, { cwd: ROOT, stdio: 'inherit' });
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      throw new Error(`${label}: could not run ${command} — is it on PATH?`);
+    }
+    throw e;
+  }
 }
+
+/** A JS entry point, on this same Node. */
+const node = (script, args, label) => run(process.execPath, [script, ...args], label);
+
+/** A repo script, by path. */
+const own = (script, args, label) => node(join(ROOT, script), args, label);
 
 function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 16);
@@ -243,6 +307,15 @@ function restore() {
   if (!staged || flags.keep) return;
   rmSync(GAMES, { recursive: true, force: true });
   if (existsSync(STASH)) renameSync(STASH, GAMES);
+  /*
+   * The icons matter as much as the games. `tauri icon` rewrites
+   * src-tauri/icons/ *in place*, so without this a single `--icon` build would
+   * permanently replace the library app's own icon set with a game's cover.
+   */
+  if (existsSync(ICONS_STASH)) {
+    rmSync(ICONS, { recursive: true, force: true });
+    renameSync(ICONS_STASH, ICONS);
+  }
   rmSync(MARKER, { force: true });
   rmSync(CONFIG, { force: true });
   staged = false;
@@ -302,27 +375,84 @@ try {
   if (flags.skipTests) {
     console.log('\n⚠ tests skipped (--skip-tests)');
   } else {
-    run(npm, ['run', 'build'], 'building the window contents');
-    run(npm, ['run', 'test:theme'], 'theme tokens resolve');
-    run(npm, ['run', 'test:register'], 'chrome tokens in scope');
+    /* `npm run build`, step by step, so there is no shell in the chain. */
+    own('scripts/check-stale.mjs', [], 'no stale files from an earlier version');
+    own('scripts/build-engine.mjs', [], 'bundling the engine');
+    node(resolveBin('typescript', 'tsc'), ['-b'], 'typechecking');
+    node(resolveBin('vite', 'vite'), ['build'], 'building the window contents');
+
+    own('check-theme-scope.cjs', [], 'theme tokens resolve');
+    own('scripts/check-register.mjs', [], 'chrome tokens in scope');
+
     /* The harness against *this* game, not the fixture: unpack it, play a
        screen, check the files land. An archive that cannot be played fails
        here rather than shipping. */
-    run('node', ['scripts/test-webview.cjs', archive], `playing ${name} in the harness`);
-    run(npm, ['run', 'test:rust'], 'rust');
+    own('scripts/test-webview.cjs', [archive], `playing ${name} in the harness`);
+    /* And the single-game interface the build is about to produce. */
+    own('scripts/test-webview.cjs', [archive, '--standalone'], 'the standalone interface');
+
+    /* cargo is a real executable on every platform, so it needs none of the
+       above — only the manifest path, since there is no shell to cd with. */
+    run('cargo', ['test', '--manifest-path', join('src-tauri', 'Cargo.toml')], 'rust');
   }
 
   /* ---- icon ------------------------------------------------------------- */
   if (flags.icon) {
-    if (!game.cover) {
-      console.log('\n⚠ --icon: the archive has no icon.png or icon.jpg; keeping the app icon');
+    /* Best candidate, not first: square, then largest, PNG breaking ties since
+       that is what the tool documents. */
+    const measured = game.covers
+      .map((entry) => {
+        const bytes = entry.read();
+        return { entry, bytes, size: imageSize(bytes) };
+      })
+      .filter((c) => c.size)
+      .sort(
+        (a, b) =>
+          Number(b.size.w === b.size.h) - Number(a.size.w === a.size.h) ||
+          b.size.w * b.size.h - a.size.w * a.size.h ||
+          Number(b.size.type === 'png') - Number(a.size.type === 'png'),
+      );
+    const best = measured[0];
+
+    if (!best) {
+      console.log('\n⚠ --icon: no readable icon.png or icon.jpg in the archive; keeping the app icon');
+    } else if (best.size.w !== best.size.h || best.size.w < 1024) {
+      /* Checked here rather than left to fail inside the tool: "tauri icon
+         refused the cover" tells you nothing about why. Upscaling a 192px
+         cover would look worse than the app's own icon, so it is not done. */
+      console.log(
+        `\n⚠ --icon: the best cover is ${best.entry.name} at ${best.size.w}×${best.size.h}; ` +
+          'tauri icon wants a square image of at least 1024×1024. Keeping the app icon',
+      );
     } else {
-      const tmp = join(ROOT, 'src-tauri', `.cover-${slug}`);
-      writeFileSync(tmp, game.cover.read());
+      const cover = best.bytes;
+      const size = best.size;
+      console.log(
+        `\n  icon source: ${best.entry.name} (${size.type.toUpperCase()} ${size.w}×${size.h})`,
+      );
+      /* Stash the icon set first: the tool writes over it. */
+      rmSync(ICONS_STASH, { recursive: true, force: true });
+      cpSync(ICONS, ICONS_STASH, { recursive: true });
+      /* Keep the real extension: the tool sniffs the format, and a .png that
+         is actually a JPEG is a worse failure than an honest .jpg. */
+      const tmp = join(ROOT, 'src-tauri', `.cover-${slug}.${size.type === 'png' ? 'png' : 'jpg'}`);
+      writeFileSync(tmp, cover);
       try {
-        run(npm, ['run', 'tauri', '--', 'icon', tmp], "deriving the icon from the game's cover");
+        node(
+          resolveBin('@tauri-apps/cli', 'tauri'),
+          ['icon', tmp],
+          "deriving the icon from the game's cover",
+        );
       } catch {
-        console.log('\n⚠ --icon: tauri icon refused the cover (it wants a large square PNG)');
+        console.log(
+          `\n⚠ --icon: tauri icon would not take ${best.entry.name}` +
+            (size.type === 'png'
+              ? '. Keeping the app icon'
+              : ' — it documents PNG input. Convert it to a 1024×1024 PNG and pass it as the\n' +
+                '  app icon manually, or re-export with the PNG in the archive. Keeping the app icon'),
+        );
+        rmSync(ICONS, { recursive: true, force: true });
+        cpSync(ICONS_STASH, ICONS, { recursive: true });
       } finally {
         rmSync(tmp, { force: true });
       }
@@ -331,11 +461,11 @@ try {
 
   /* ---- build ------------------------------------------------------------ */
   const bundles = [flags.nsis && 'nsis', flags.msi && 'msi'].filter(Boolean);
-  const args = ['run', 'tauri', '--', 'build', '--config', 'src-tauri/tauri.standalone.conf.json'];
+  const args = ['build', '--config', 'src-tauri/tauri.standalone.conf.json'];
   if (bundles.length) args.push('--bundles', bundles.join(','));
   /* --portable alone still needs a compile, just no installer. */
   else args.push('--no-bundle');
-  run(npm, args, `compiling ${name}`);
+  node(resolveBin('@tauri-apps/cli', 'tauri'), args, `compiling ${name}`);
 
   /* ---- collect ---------------------------------------------------------- */
   mkdirSync(outDir, { recursive: true });

@@ -72,6 +72,7 @@ TODO.md
 src-tauri/standalone.json
 src-tauri/tauri.standalone.conf.json
 src-tauri/.games-stash/
+src-tauri/.icons-stash/
 dist-apps/
 # The cs:export inbox. Keep the README, never the games.
 stories/*
