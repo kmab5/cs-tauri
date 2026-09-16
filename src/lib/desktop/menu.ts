@@ -20,6 +20,7 @@ export type MenuId =
   | 'toggle-sidebar'
   | 'toggle-panel'
   | 'palette'
+  | 'stats'
   | 'toggle-focus'
   | 'zoom-in'
   | 'zoom-out'
@@ -46,6 +47,7 @@ const KEYS: Record<string, MenuId> = {
   'mod+l': 'restore',
   'mod+shift+r': 'restart',
   'mod+shift+a': 'achievements',
+  'mod+shift+s': 'stats',
   'mod+,': 'settings',
   'mod+\\': 'toggle-sidebar',
   'mod+i': 'toggle-panel',
@@ -111,15 +113,6 @@ export async function setMenuVisible(visible: boolean): Promise<void> {
     await invoke('set_menu_visible', { visible });
   } catch {
     /* nothing to do: the menu simply stays where it is */
-  }
-}
-
-/** Greys out File ▸ Open and Back to Library in a standalone build. */
-export async function setLibraryMenuEnabled(enabled: boolean): Promise<void> {
-  try {
-    await invoke('set_library_menu_enabled', { enabled });
-  } catch {
-    /* an older build without the command keeps them enabled */
   }
 }
 

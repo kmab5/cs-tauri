@@ -281,6 +281,20 @@ pub struct AppMode {
     pub author: Option<String>,
 }
 
+/// Whether this build ships a single game.
+///
+/// Generic over the runtime and taking a reference, because the menu is built
+/// before there is an `App` — the builder hands its closure an `AppHandle`. The
+/// menu has to be *constructed* differently rather than greyed out afterwards:
+/// an exported story has no library, so "Back to Library" and "Open Game…"
+/// should not be in its menu bar at all.
+pub fn is_standalone<R: tauri::Runtime>(app: &AppHandle<R>) -> bool {
+    app.path()
+        .resolve("standalone.json", tauri::path::BaseDirectory::Resource)
+        .map(|path| path.exists())
+        .unwrap_or(false)
+}
+
 #[tauri::command]
 pub fn app_mode(app: AppHandle) -> AppMode {
     let Ok(path) = app

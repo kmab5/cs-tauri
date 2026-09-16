@@ -12,6 +12,7 @@ import { Shell } from '@/features/Shell';
 import { Button } from '@/components/ui/button';
 import { getTheme, getZoom } from '@/lib/theme';
 import { loadMode, type AppMode } from '@/lib/mode';
+import { setWindowTitle } from '@/lib/desktop/title';
 import { importBundled, listGames } from '@/lib/library';
 
 export default function App() {
@@ -24,7 +25,9 @@ export default function App() {
     setError(null);
     loadEngine()
       .then(async (engine) => {
-        document.title = manifest.title;
+        /* The window title, not just the document's: the taskbar, Alt-Tab and
+           the window switcher all read the former. */
+        setWindowTitle(manifest.title);
         const icon = await loadIcon(manifest);
         const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
         if (link) link.href = icon ?? `${import.meta.env.BASE_URL}favicon.png`;
@@ -52,6 +55,10 @@ export default function App() {
       if (!live) return;
       setMode(m);
       if (!m.standalone) return;
+      /* Named from the marker the exporter wrote, before the engine has even
+         loaded — the window appears on the taskbar long before the first
+         screen renders. */
+      setWindowTitle(m.title);
       try {
         await importBundled();
         const games = await listGames();

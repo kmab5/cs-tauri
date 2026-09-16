@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.2.1` reads as **major release · major update · session**. `package.json` is
+`0.2.2` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -44,9 +44,9 @@ disagrees with either.
 Pushing a `v*` tag builds and publishes:
 
 ```bash
-npm version 0.2.2 --no-git-tag-version   # then update src-tauri/Cargo.toml
-git commit -am "release: v0.2.2"
-git tag v0.2.2 && git push --follow-tags
+npm version 0.2.3 --no-git-tag-version   # then update src-tauri/Cargo.toml
+git commit -am "release: v0.2.3"
+git tag v0.2.3 && git push --follow-tags
 ```
 
 `.github/workflows/release.yml` then runs the tests, builds the NSIS installer,
@@ -93,18 +93,21 @@ code and the same binary — there is no second frontend to keep in step, and
 build by mocking that one answer.
 
 In standalone mode there is no shelf, no importing, no `.cszip` file
-association, and no route back to a library that does not exist — the palette,
-the menu bar and the sidebar all drop those commands rather than offering
-something inert.
+association, and no route back to a library that does not exist. The native menu
+is *built* without those items rather than greying them out — Rust checks for
+the `standalone.json` resource while constructing the menu — and the palette and
+sidebar drop them too. The window takes the game's own title, from `*title` in
+its `startup.txt`.
 
 `cs:export` spawns `node` directly rather than going through npm — on Windows
 `npm` is `npm.cmd`, and Node refuses to spawn a `.cmd` without a shell since the
 fix for CVE-2024-27980. Each step runs the package's own JS entry point instead.
 
-It stages the games folder, the icon set and two config files inside
-`src-tauri/`, and puts all of them back afterwards, including on Ctrl-C —
-`tauri icon` rewrites `src-tauri/icons/` in place, so `--icon` would otherwise
-replace the library app's icon permanently. Tests run before the compile, and the webview
+It stages the games folder and two config files inside `src-tauri/` and puts
+them back afterwards, including on Ctrl-C. `--icon` never touches
+`src-tauri/icons/` at all: the game's icons are generated into their own
+directory (`tauri icon -o`) and the overlay config points at them, so an export
+cannot change the player's own icon however it fails. Tests run before the compile, and the webview
 harness runs against **the archive being shipped** rather than the fixture, so a
 game that cannot be unpacked or played fails the build instead of shipping.
 
@@ -264,7 +267,8 @@ and Enter confirms — select-then-confirm, because a mis-tap that silently
 branches the story is far worse than one extra keystroke. Arrow keys move
 between options once one has focus, which native radios give for free.
 
-`⌘/Ctrl+K` command palette — everything the app can do, searchable · `⌘O` open · `⌘S` save · `⌘L` restore · `⌘⇧R` restart · `⌘⇧L` library ·
+`⌘/Ctrl+K` command palette — everything the app can do, searchable · `⌘O` open ·
+`⌘⇧S` stats · `⌘S` save · `⌘L` restore · `⌘⇧R` restart · `⌘⇧L` library ·
 `⌘\` sidebar · `⌘I` stats · `⌘⇧F` focus mode · `⌘+/-/0` text size · `⌘,`
 settings.
 

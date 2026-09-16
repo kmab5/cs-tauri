@@ -5,6 +5,91 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 13 — v0.2.2, five from the first real export
+
+The exported app working is the good news. All five notes are fixed, and two of
+them were mine in a way worth naming.
+
+### The icon: the fix was wrong, not just incomplete
+
+Last session I made `--icon` stash `src-tauri/icons/`, let `tauri icon`
+overwrite it, then put it back. That is the wrong shape of solution. Anything
+between the two halves — a crash, a Ctrl-C, a locked file, a failed compile —
+leaves the player wearing a game's cover, and the window for that included a
+five-minute cargo build.
+
+It now never touches the shared directory. `tauri icon -o .icons-<slug>`
+generates into a directory of its own and the overlay config points
+`bundle.icon` at it. There is no window in which the player's icon is wrong,
+because it is never written.
+
+And while rewriting it I found the worse version of your bug still in the
+error path: a leftover `rmSync(ICONS)` in the `catch`, which would have
+**deleted** the app's icon set outright if `tauri icon` had failed. Gone.
+
+### The menu still said "Back to Library"
+
+My fix greyed those items out via a command from the front end. Two things wrong
+with that: it ran after the menu was already on screen, and greyed-out is not
+absent — a disabled "Back to Library" still tells the reader this app has a
+library somewhere.
+
+The menu is now *built* differently. Rust checks for the `standalone.json`
+resource while constructing the menu (`library::is_standalone`), and in a
+standalone build File contains only Close — no "Open Game…", no "Back to
+Library". The `set_library_menu_enabled` command is deleted; there is nothing
+left for it to do.
+
+### ⌘⇧S did nothing, and I put that hint there
+
+The palette has advertised `⌘⇧S` for the stats screen since the session I built
+it, and **nothing was ever listening for it**. I wrote the hint from the label I
+wanted rather than from a binding that existed, which is the kind of thing that
+makes a keyboard-first app feel unreliable.
+
+Both ends exist now: a "Stats Screen" item in the Game menu with
+`CmdOrCtrl+Shift+S`, and `mod+shift+s` in the front end's own key map so it
+works whether or not the native menu is behaving. The Game menu also got
+reordered — save, restore, then stats and achievements, then restart on its own
+past a separator, since it is the one item that discards progress.
+
+There is a harness assertion for it now: dispatch Ctrl+Shift+S, expect the
+overlay to be `stats`. Every other advertised shortcut was already in the key
+map; this was the only one that was fiction.
+
+### The window title
+
+`document.title` names the *document*. The native window keeps whatever
+`productName` it was built with, which is why the library build said
+"ChoiceScript Player" with Sordwin open and an exported story showed its product
+name in Alt-Tab.
+
+`setWindowTitle()` sets both, since both are read in different places — the
+document title is what a screen reader announces, the window title is what the
+taskbar and window switcher show. In a standalone build it is set from the
+exporter's marker file *before the engine loads*, so the taskbar entry is never
+briefly wrong.
+
+### Verified
+
+- `npm run test:webview` — **76 passed, 0 failed** (three new: the document
+  title follows the game, the native window title matches it, and Ctrl+Shift+S
+  opens the stats screen)
+- `npm run test:standalone` — **16 passed, 0 failed** (new: the window is named
+  after the story, not the player)
+- `npm run test:game` — **71 passed, 0 failed** on Choice of Magics
+- `cs:export` end to end, including `--icon` deriving from the 1024×1024 JPEG,
+  and `git status` clean on `src-tauri/icons` afterwards — including after the
+  run failed at the cargo step, which is the case that mattered
+
+### Still uncompiled here
+
+`is_standalone` and the rebuilt `build()` in `menu.rs`. If the menu fails to
+construct, every accelerator goes with it — but the front-end key map now covers
+the same bindings independently, which is exactly why that layer exists.
+
+---
+
 ## 2026-09-08 · Session 12 — v0.2.1, the export command on a real machine
 
 Your run got four steps in and died on the first spawn. Fixed, plus three more

@@ -59,8 +59,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GAMES = join(ROOT, 'src-tauri', 'games');
 const STASH = join(ROOT, 'src-tauri', '.games-stash');
 const MARKER = join(ROOT, 'src-tauri', 'standalone.json');
-const ICONS = join(ROOT, 'src-tauri', 'icons');
-const ICONS_STASH = join(ROOT, 'src-tauri', '.icons-stash');
+/* Named per game and relative to src-tauri, because the overlay config points
+   at it and Tauri resolves bundle.icon paths from there. */
+const iconDirFor = (slug) => `.icons-${slug}`;
 const CONFIG = join(ROOT, 'src-tauri', 'tauri.standalone.conf.json');
 
 /**
@@ -302,22 +303,23 @@ console.log(`  v${version} · ${identifier}`);
 console.log(`  building: ${wanted.join(', ')}\n`);
 
 let staged = false;
+/** Set by --icon: the per-game icon directory, relative to src-tauri. */
+let iconOverride = null;
 
 function restore() {
   if (!staged || flags.keep) return;
   rmSync(GAMES, { recursive: true, force: true });
   if (existsSync(STASH)) renameSync(STASH, GAMES);
-  /*
-   * The icons matter as much as the games. `tauri icon` rewrites
-   * src-tauri/icons/ *in place*, so without this a single `--icon` build would
-   * permanently replace the library app's own icon set with a game's cover.
-   */
-  if (existsSync(ICONS_STASH)) {
-    rmSync(ICONS, { recursive: true, force: true });
-    renameSync(ICONS_STASH, ICONS);
-  }
   rmSync(MARKER, { force: true });
   rmSync(CONFIG, { force: true });
+  /*
+   * The game's icons live in their own directory and are simply deleted. They
+   * are never written into src-tauri/icons: stashing that and putting it back
+   * afterwards was the previous approach and it was wrong — any crash, kill or
+   * locked file between the two halves left the player wearing a game's cover,
+   * and the window for that included a five-minute cargo build.
+   */
+  rmSync(join(ROOT, 'src-tauri', iconDirFor(slug)), { recursive: true, force: true });
   staged = false;
 }
 
@@ -346,29 +348,6 @@ try {
   writeFileSync(
     MARKER,
     JSON.stringify({ standalone: true, title: name, author: game.author, game: slug }, null, 2),
-  );
-
-  /* A config overlay, merged by `tauri build --config`. Product name, version
-     and identifier all change; everything else is inherited. */
-  writeFileSync(
-    CONFIG,
-    JSON.stringify(
-      {
-        productName: name,
-        version,
-        identifier,
-        bundle: {
-          resources: ['games/*.cszip', 'standalone.json'],
-          shortDescription: name,
-          longDescription: `${name}${game.author ? ` by ${game.author}` : ''}. A ChoiceScript story.`,
-          /* No .cszip association: a single-game app has nothing to do with
-             someone else's archive. */
-          fileAssociations: [],
-        },
-      },
-      null,
-      2,
-    ),
   );
 
   /* ---- test ------------------------------------------------------------- */
@@ -430,34 +409,75 @@ try {
       console.log(
         `\n  icon source: ${best.entry.name} (${size.type.toUpperCase()} ${size.w}×${size.h})`,
       );
-      /* Stash the icon set first: the tool writes over it. */
-      rmSync(ICONS_STASH, { recursive: true, force: true });
-      cpSync(ICONS, ICONS_STASH, { recursive: true });
+      const iconDir = join(ROOT, 'src-tauri', iconDirFor(slug));
+      rmSync(iconDir, { recursive: true, force: true });
+      mkdirSync(iconDir, { recursive: true });
       /* Keep the real extension: the tool sniffs the format, and a .png that
          is actually a JPEG is a worse failure than an honest .jpg. */
       const tmp = join(ROOT, 'src-tauri', `.cover-${slug}.${size.type === 'png' ? 'png' : 'jpg'}`);
       writeFileSync(tmp, cover);
       try {
+        /* -o keeps this out of src-tauri/icons entirely. The player's own icon
+           is never touched by an export, whatever happens next. */
         node(
           resolveBin('@tauri-apps/cli', 'tauri'),
-          ['icon', tmp],
+          ['icon', tmp, '-o', iconDir],
           "deriving the icon from the game's cover",
         );
+        iconOverride = iconDirFor(slug);
       } catch {
+        rmSync(iconDir, { recursive: true, force: true });
         console.log(
           `\n⚠ --icon: tauri icon would not take ${best.entry.name}` +
             (size.type === 'png'
               ? '. Keeping the app icon'
-              : ' — it documents PNG input. Convert it to a 1024×1024 PNG and pass it as the\n' +
-                '  app icon manually, or re-export with the PNG in the archive. Keeping the app icon'),
+              : ' — it documents PNG input. Convert it to a 1024×1024 PNG and put that in the\n' +
+                '  archive as icon.png. Keeping the app icon'),
         );
-        rmSync(ICONS, { recursive: true, force: true });
-        cpSync(ICONS_STASH, ICONS, { recursive: true });
       } finally {
         rmSync(tmp, { force: true });
       }
     }
   }
+
+  /* ---- config ----------------------------------------------------------- */
+  /*
+   * Written here rather than during staging because it carries the icon paths,
+   * and the icons are derived above. A config overlay, merged by
+   * `tauri build --config`: product name, version, identifier and icons change,
+   * everything else is inherited.
+   */
+  writeFileSync(
+    CONFIG,
+    JSON.stringify(
+      {
+        productName: name,
+        version,
+        identifier,
+        bundle: {
+          resources: ['games/*.cszip', 'standalone.json'],
+          shortDescription: name,
+          longDescription: `${name}${game.author ? ` by ${game.author}` : ''}. A ChoiceScript story.`,
+          /* No .cszip association: a single-game app has nothing to do with
+             someone else's archive. */
+          fileAssociations: [],
+          ...(iconOverride
+            ? {
+                icon: [
+                  `${iconOverride}/32x32.png`,
+                  `${iconOverride}/128x128.png`,
+                  `${iconOverride}/128x128@2x.png`,
+                  `${iconOverride}/icon.icns`,
+                  `${iconOverride}/icon.ico`,
+                ],
+              }
+            : {}),
+        },
+      },
+      null,
+      2,
+    ),
+  );
 
   /* ---- build ------------------------------------------------------------ */
   const bundles = [flags.nsis && 'nsis', flags.msi && 'msi'].filter(Boolean);
@@ -495,7 +515,9 @@ try {
        Tauri resolves resources for an unpackaged binary. */
     writeFileSync(join(stage, 'games', `${slug}.cszip`), bytes);
     copyFileSync(MARKER, join(stage, 'standalone.json'));
-    cpSync(join(ROOT, 'src-tauri', 'icons'), join(stage, 'icons'), { recursive: true });
+    cpSync(join(ROOT, 'src-tauri', iconOverride ?? 'icons'), join(stage, 'icons'), {
+      recursive: true,
+    });
     artefacts.push(stage);
     console.log(`\n  portable tree: ${stage}`);
   }

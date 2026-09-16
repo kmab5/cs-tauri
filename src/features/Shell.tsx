@@ -25,7 +25,7 @@ import {
 import type { ChoiceScriptApi } from '@/lib/choicescript';
 import type { StoredGame } from '@/lib/library';
 import { useMenu } from '@/lib/desktop/menu';
-import { setGameMenuEnabled, setLibraryMenuEnabled, setMenuVisible } from '@/lib/desktop/menu';
+import { setGameMenuEnabled, setMenuVisible } from '@/lib/desktop/menu';
 import { Player } from './Player';
 import { GamePanel } from './GamePanel';
 import { LibraryPage } from './LibraryPage';
@@ -133,6 +133,9 @@ function GameControls({
   };
 
   useMenu({
+    /* The palette has advertised ⌘⇧S for the stats screen since it was built,
+       and nothing was listening for it. Both ends exist now. */
+    stats: () => cs.openStats(),
     save: () => cs.openSaves(),
     restore: () => cs.openSaves(),
     restart: () => cs.restart(),
@@ -305,8 +308,7 @@ export function Shell({
      enabled and inert. */
   useEffect(() => {
     void setGameMenuEnabled(!!game && !!cs);
-    void setLibraryMenuEnabled(!standalone);
-  }, [game, cs, standalone]);
+  }, [game, cs]);
 
   /*
    * One registry, three surfaces: the palette runs the same handlers the menu

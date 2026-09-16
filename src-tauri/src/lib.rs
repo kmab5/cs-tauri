@@ -97,7 +97,6 @@ pub fn run() {
             library::app_mode,
             menu::set_game_menu_enabled,
             menu::set_menu_visible,
-            menu::set_library_menu_enabled,
             store::read_store,
             store::write_store,
         ])

@@ -23,6 +23,11 @@ use tauri::menu::AboutMetadata;
 use tauri::{AppHandle, Manager, Runtime};
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
+    /* A standalone build has one game and no shelf. Those items are omitted,
+       not disabled: a greyed-out "Back to Library" still tells the reader this
+       app has a library somewhere. */
+    let standalone = crate::library::is_standalone(app);
+
     let open = MenuItemBuilder::new("Open Game…")
         .id("open-game")
         .accelerator("CmdOrCtrl+O")
@@ -78,6 +83,11 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .accelerator("CmdOrCtrl+Comma")
         .build(app)?;
 
+    let stats = MenuItemBuilder::new("Stats Screen")
+        .id("stats")
+        .accelerator("CmdOrCtrl+Shift+S")
+        .build(app)?;
+
     let mut items: Vec<&dyn tauri::menu::IsMenuItem<R>> = Vec::new();
 
     // The application menu is macOS only; on Windows and Linux these live
@@ -103,10 +113,11 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     #[cfg(target_os = "macos")]
     items.push(&app_menu);
 
-    let file = SubmenuBuilder::new(app, "File")
-        .item(&open)
-        .item(&library)
-        .separator()
+    let mut file = SubmenuBuilder::new(app, "File");
+    if !standalone {
+        file = file.item(&open).item(&library).separator();
+    }
+    let file = file
         .item(&PredefinedMenuItem::close_window(app, None)?)
         .build()?;
     items.push(&file);
@@ -115,8 +126,10 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .item(&save)
         .item(&restore)
         .separator()
-        .item(&restart)
+        .item(&stats)
         .item(&achievements)
+        .separator()
+        .item(&restart)
         .build()?;
     items.push(&game);
 
@@ -155,6 +168,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 const GAME_ITEMS: &[&str] = &[
     "save",
     "restore",
+    "stats",
     "restart",
     "achievements",
     "toggle-panel",
@@ -169,25 +183,6 @@ pub fn set_game_menu_enabled(app: AppHandle, enabled: bool) -> Result<(), String
     };
     for id in GAME_ITEMS {
         if let Some(item) = menu.get(*id) {
-            if let Some(item) = item.as_menuitem() {
-                item.set_enabled(enabled).map_err(|e| e.to_string())?;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Grey out the library items in a standalone build.
-///
-/// A single-game app has no shelf to go back to and no second archive to open,
-/// so offering either is a lie about what the app can do.
-#[tauri::command]
-pub fn set_library_menu_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let Some(menu) = app.menu() else {
-        return Ok(());
-    };
-    for id in ["open-game", "library"] {
-        if let Some(item) = menu.get(id) {
             if let Some(item) = item.as_menuitem() {
                 item.set_enabled(enabled).map_err(|e| e.to_string())?;
             }

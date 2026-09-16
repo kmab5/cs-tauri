@@ -235,6 +235,7 @@ function importArchive(dataDir, bytes, source) {
 
 /** The command table. Each entry is one #[tauri::command] on the Rust side. */
 function makeBridge(dataDir, archivePath, archiveBytes) {
+  const titles = []; // every native window title set, in order
   const listeners = new Map(); // event name -> Set of callback ids
   const callbacks = new Map(); // id -> fn
   let nextCallback = 1;
@@ -318,6 +319,10 @@ function makeBridge(dataDir, archivePath, archiveBytes) {
     'plugin:event|unlisten': () => null,
     /* Focus mode and the menu-enable command both reach Rust. */
     'plugin:window|set_fullscreen': () => null,
+    'plugin:window|set_title': (args) => {
+      titles.push(args && args.value !== undefined ? args.value : args && args.title);
+      return null;
+    },
     set_game_menu_enabled: () => null,
     set_menu_visible: () => null,
     export_game: () => path.join(dataDir, 'exported.cszip'),
@@ -352,7 +357,7 @@ function makeBridge(dataDir, archivePath, archiveBytes) {
     },
   };
 
-  return { internals, calls, archivePath, callbacks, listeners };
+  return { internals, calls, titles, archivePath, callbacks, listeners };
 }
 
 /* ------------------------------------------------------------------ server */
@@ -477,6 +482,9 @@ server.listen(PORT, async () => {
     ok('the game opened by itself', typeof win.ChoiceScript === 'object');
     ok('its title is in the titlebar', !!d.querySelector('.app-title b')?.textContent.trim(),
       d.querySelector('.app-title b')?.textContent);
+    ok('the window is named after the story, not the player',
+      bridge.titles.includes('The Bundled Story'),
+      bridge.titles.join(' · ') || 'set_title never called');
     ok('the sidebar has no way back to a library',
       !Array.prototype.slice
         .call(d.querySelectorAll('aside[aria-label="This game"] button'))
@@ -692,6 +700,27 @@ server.listen(PORT, async () => {
   ok('opening the game stamped it as played',
     !!manifest && games.length === 1 &&
       !!JSON.parse(fs.readFileSync(path.join(gameDir, 'manifest.json'), 'utf8')).lastPlayedAt);
+
+  console.log('\nthe window is named after the game');
+  ok('the document title is the game', /./.test(d.title) && d.title !== 'ChoiceScript Player',
+    d.title);
+  ok('and so is the native window title',
+    bridge.titles.some((t) => t && t === d.title),
+    bridge.titles.join(' · ') || 'set_title never called');
+
+  console.log('\nthe advertised shortcuts exist');
+  /* The palette has shown ⌘⇧S for the stats screen since it was built, and for
+     two sessions nothing was listening for it. */
+  win.ChoiceScript.closeOverlay();
+  await new Promise((r) => setTimeout(r, 200));
+  win.document.dispatchEvent(
+    new win.KeyboardEvent('keydown', { key: 's', ctrlKey: true, shiftKey: true, bubbles: true }),
+  );
+  await new Promise((r) => setTimeout(r, 500));
+  ok('ctrl+shift+s opens the stats screen', win.ChoiceScript.getState().overlay === 'stats',
+    String(win.ChoiceScript.getState().overlay));
+  win.ChoiceScript.closeOverlay();
+  await new Promise((r) => setTimeout(r, 250));
 
   console.log('\nthe command palette');
   const palBtn = Array.prototype.slice
