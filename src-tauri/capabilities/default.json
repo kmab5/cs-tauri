@@ -16,8 +16,6 @@
     "core:webview:allow-internal-toggle-devtools",
     "opener:allow-open-url",
     "window-state:default",
-    "core:window:allow-destroy",
-    "core:window:allow-hide-menu",
-    "core:window:allow-show-menu"
+    "core:window:allow-destroy"
   ]
 }
