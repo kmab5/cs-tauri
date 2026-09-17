@@ -34,6 +34,12 @@ import { DropOverlay } from './DropOverlay';
  * searching `dist/` for those strings.
  */
 import { isAuthorMode } from '@/lib/author/mode';
+import {
+  DIVIDER,
+  useContextMenu,
+  useContextMenuOpener,
+  type MenuEntry,
+} from '@/features/menu/ContextMenu';
 import { TestingPanel } from './author/TestingPanel';
 
 const BuildAppDialog = import.meta.env.DEV
@@ -160,6 +166,51 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
     `${game.title} ${game.author}`.toLowerCase().includes(filter.trim().toLowerCase()),
   );
 
+  const openMenu = useContextMenuOpener();
+
+  const cardMenu = (event: React.MouseEvent, game: StoredGame) =>
+    openMenu(event, [
+      { label: 'Play', run: () => onPlay(game) },
+      DIVIDER,
+      {
+        label: 'Export with saves…',
+        run: () => {
+          setExported(null);
+          setError(null);
+          exportGame(game.id).then(setExported, (e: Error) => setError(e.message));
+        },
+      },
+      ...(import.meta.env.DEV
+        ? [{ label: 'Build a standalone app…', run: () => setBuilding(game) }]
+        : []),
+      DIVIDER,
+      {
+        label: 'Delete from this machine',
+        danger: true,
+        run: () =>
+          deleteGame(game.id)
+            .then(refresh)
+            .catch((e: Error) => setError(e.message)),
+      },
+    ]);
+
+  /* The shelf's own background menu: what you can do here with no game
+     selected. */
+  /* ⌘K goes through the same registry the palette and menu bar use. */
+  const openPalette = () =>
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+
+  const shelfMenu = useContextMenu(
+    (): MenuEntry[] => [
+      { label: 'Add game…', hint: '⌘O', run: () => fileInput.current?.click() },
+      ...(author && games?.length
+        ? [DIVIDER, { label: testing ? 'Hide testing' : 'Testing…', run: () => setTesting((v) => !v) }]
+        : []),
+      DIVIDER,
+      { label: 'Command palette', hint: '⌘K', run: () => openPalette() },
+    ],
+  );
+
   /* Most recent first, and only games that have actually been opened. */
   const recent = (games ?? [])
     .filter((game) => !!game.lastPlayedAt)
@@ -167,7 +218,7 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
     .slice(0, 8);
 
   return (
-    <div className="lib-shell">
+    <div className="lib-shell" onContextMenu={shelfMenu}>
       {/* Dropping is only offered here. Mid-game there is nothing sensible to
           do with an archive except queue it for a reload. */}
       <DropOverlay onImported={refresh} onBusy={setBusy} onError={setError} />
@@ -298,6 +349,13 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
             className="lib-card"
             aria-label={`Play ${game.title}${game.author ? ` by ${game.author}` : ''}`}
             onClick={() => onPlay(game)}
+            onContextMenu={(event) => {
+              /* The card's own menu: everything the hover actions do, named,
+                 plus the two-step delete collapsed into one deliberate item. */
+              event.preventDefault();
+              event.stopPropagation();
+              cardMenu(event, game);
+            }}
           >
             <Cover game={game} />
             <span className="lib-card-body">

@@ -66,12 +66,14 @@ export function GamePanel({
   game,
   cs,
   onExit,
+  onContextMenu,
   children,
 }: {
   game: StoredGame;
   cs: ChoiceScriptApi | null;
   /** null in a standalone build: there is no library to go back to. */
   onExit: (() => void) | null;
+  onContextMenu?: (event: React.MouseEvent) => void;
   /** The width grip, which has to live inside the panel it resizes. */
   children?: React.ReactNode;
 }) {
@@ -119,7 +121,7 @@ export function GamePanel({
   };
 
   return (
-    <aside className="app-sidebar" aria-label="This game">
+    <aside className="app-sidebar" aria-label="This game" onContextMenu={onContextMenu}>
       <div className="app-sidebar-head" data-tauri-drag-region>
         {onExit ? (
           <button

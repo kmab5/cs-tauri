@@ -1,70 +1,55 @@
 /**
- * God mode: the game's variables, editable.
+ * God mode: the game's variables, edited like a diff.
  *
- * Two views, because "the stats the author put on the sheet" and "every
- * variable in the game" are different questions and both get asked:
+ * Nothing is written to the interpreter as you type. Edits collect as a draft,
+ * the changed rows are marked, and **Apply** commits them — which is the
+ * difference between inspecting a game and accidentally rewriting one. The
+ * marking follows the convention everyone already knows from a diff:
  *
- *  - **Sheet** — the rows of `*stat_chart` in `choicescript_stats.txt`, with
- *    the author's display label beside the variable name, in the author's own
- *    order. This is the character sheet as designed.
- *  - **All** — every permanent variable and every temp, with the engine's own
- *    bookkeeping behind a toggle: a list with `choice_reuse` and `_looplimit`
- *    in it buries the ten variables that matter.
+ *   amber  — altered, not yet applied
+ *   green  — applied just now
+ *   none   — unchanged
  *
- * Writes go straight into the interpreter's own objects and keep the variable's
- * existing type, so `*if strength > 50` still means what the author wrote.
- * Values refresh on every screen, because the story is also writing to them.
+ * One level of undo, because that is the mistake people actually make: apply,
+ * see the story react, want it back. The snapshot is taken at apply time from
+ * the values the interpreter held, so undo restores what *was* rather than what
+ * the draft thought was there.
+ *
+ * Two views: **Sheet** is everything `choicescript_stats` uses, in the order it
+ * uses it, labelled where the author labelled it. **All** is every variable and
+ * temp in the game.
  */
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { Eye, EyeOff, X } from 'lucide-react';
+import { Check, Eye, EyeOff, Undo2, X } from 'lucide-react';
 
 import type { ChoiceScriptApi } from '@/lib/choicescript';
 import { getScenes } from '@/lib/db';
-import { parseStatChart, readSheet, readVars, writeVar, type GameVar } from '@/lib/author/vars';
+import {
+  parseStatsScene,
+  readSheet,
+  readVars,
+  writeVar,
+  type GameVar,
+  type StatsScene,
+} from '@/lib/author/vars';
 import { trace } from '@/lib/author/instrument';
 
-function Value({ variable, onEdit }: { variable: GameVar; onEdit: (raw: string) => void }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const shown = draft ?? (typeof variable.value === 'string' ? variable.value : String(variable.value));
+type Status = 'none' | 'altered' | 'applied';
+type VarType = 'any' | 'number' | 'boolean' | 'text';
 
-  if (typeof variable.value === 'boolean' || /^(true|false)$/i.test(String(variable.value))) {
-    return (
-      <button
-        className="app-btn god-bool"
-        aria-pressed={String(variable.value) === 'true'}
-        onClick={() => onEdit(String(String(variable.value) !== 'true'))}
-      >
-        {String(variable.value)}
-      </button>
-    );
+const EMPTY: StatsScene = { labels: new Map(), referenced: [] };
+
+const show = (value: unknown) =>
+  value === undefined ? '' : typeof value === 'string' ? value : String(value);
+
+/** Numbers the engine holds as strings count as numbers — most of them are. */
+function typeOf(value: unknown): VarType {
+  if (typeof value === 'boolean' || /^(true|false)$/i.test(String(value))) return 'boolean';
+  if (typeof value === 'number') return 'number';
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) {
+    return 'number';
   }
-
-  return (
-    <input
-      className="app-input god-value"
-      /* Numeric whether the engine is holding it as a number or as a numeric
-         string, which it usually is. */
-      inputMode={
-        typeof variable.value === 'number' ||
-        (typeof variable.value === 'string' && Number.isFinite(Number(variable.value)))
-          ? 'decimal'
-          : 'text'
-      }
-      value={shown}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        if (draft !== null && draft !== String(variable.value)) onEdit(draft);
-        setDraft(null);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur();
-        if (e.key === 'Escape') {
-          setDraft(null);
-          e.currentTarget.blur();
-        }
-      }}
-    />
-  );
+  return 'text';
 }
 
 export function GodMode({
@@ -79,51 +64,142 @@ export function GodMode({
   children?: React.ReactNode;
 }) {
   const state = useSyncExternalStore(cs.subscribe, cs.getState, cs.getState);
-  const [labels, setLabels] = useState<Map<string, string>>(new Map());
+  const [scene, setScene] = useState<StatsScene>(EMPTY);
   const [view, setView] = useState<'sheet' | 'all'>('sheet');
   const [showInternal, setShowInternal] = useState(false);
-  const [filter, setFilter] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
-  /* The labels come from the stats scene on disk rather than from the engine:
-     *stat_chart rows are parsed by the interpreter as it renders them, and this
-     panel has to know them before the reader has opened the sheet. */
+  /* Plain search, then the advanced pane. */
+  const [filter, setFilter] = useState('');
+  const [advanced, setAdvanced] = useState(false);
+  const [type, setType] = useState<VarType>('any');
+  const [useRegex, setUseRegex] = useState(false);
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [scope, setScope] = useState<'any' | 'stat' | 'temp'>('any');
+
+  /* The draft, the last applied set, and the snapshot undo restores. */
+  const [draft, setDraft] = useState<Map<string, string>>(new Map());
+  const [applied, setApplied] = useState<Set<string>>(new Set());
+  const [undoable, setUndoable] = useState<Map<string, string> | null>(null);
+
   useEffect(() => {
     void getScenes(gameId)
       .then((scenes) => {
         const stats = Object.entries(scenes).find(([name]) =>
           /^choicescript_stats$/i.test(name),
         )?.[1];
-        setLabels(stats ? parseStatChart(stats) : new Map());
+        setScene(stats ? parseStatsScene(stats) : EMPTY);
       })
-      .catch(() => setLabels(new Map()));
+      .catch(() => setScene(EMPTY));
   }, [gameId]);
 
   const vars = useMemo(
-    () => (view === 'sheet' ? readSheet(labels) : readVars(labels)),
-    /* state.history and tick are the refresh triggers: the story writes to
-       these objects too, and a stale sheet is worse than none. */
+    () => (view === 'sheet' ? readSheet(scene) : readVars(scene.labels)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [labels, view, state.history, tick],
+    [scene, view, state.history, tick],
   );
+
+  const match = useCallback(
+    (variable: GameVar) => {
+      const haystack = `${variable.name} ${variable.label ?? ''}`;
+      const needle = filter.trim();
+      if (!needle) return true;
+      if (!useRegex) {
+        return caseSensitive
+          ? haystack.includes(needle)
+          : haystack.toLowerCase().includes(needle.toLowerCase());
+      }
+      try {
+        return new RegExp(needle, caseSensitive ? '' : 'i').test(haystack);
+      } catch {
+        /* An unfinished regex matches nothing rather than throwing on a
+           keystroke; the error line says so. */
+        return false;
+      }
+    },
+    [filter, useRegex, caseSensitive],
+  );
+
+  const regexError = useMemo(() => {
+    if (!useRegex || !filter.trim()) return null;
+    try {
+      new RegExp(filter);
+      return null;
+    } catch (e) {
+      return (e as Error).message;
+    }
+  }, [useRegex, filter]);
 
   const shown = vars.filter(
     (v) =>
       (showInternal || !v.internal) &&
-      `${v.name} ${v.label ?? ''}`.toLowerCase().includes(filter.trim().toLowerCase()),
+      (scope === 'any' || v.scope === scope) &&
+      (type === 'any' || typeOf(v.value) === type) &&
+      match(v),
   );
 
-  const edit = useCallback((variable: GameVar, raw: string) => {
+  const key = (v: GameVar) => `${v.scope}:${v.name}`;
+
+  const statusOf = (v: GameVar): Status => {
+    if (draft.has(key(v))) return 'altered';
+    if (applied.has(key(v))) return 'applied';
+    return 'none';
+  };
+
+  const edit = (v: GameVar, raw: string) => {
+    setError(null);
+    setDraft((current) => {
+      const next = new Map(current);
+      if (raw === show(v.value)) next.delete(key(v));
+      else next.set(key(v), raw);
+      return next;
+    });
+  };
+
+  const apply = () => {
+    const before = new Map<string, string>();
+    const done = new Set<string>();
     try {
-      const value = writeVar(variable.name, variable.scope, raw);
-      trace('note', `god mode: ${variable.name} = ${JSON.stringify(value)}`);
-      setError(null);
+      for (const [id, raw] of draft) {
+        const [varScope, name] = id.split(/:(.+)/) as ['stat' | 'temp', string];
+        const existing = vars.find((v) => key(v) === id);
+        before.set(id, show(existing?.value));
+        const value = writeVar(name, varScope, raw);
+        trace('note', `god mode: ${name} = ${JSON.stringify(value)}`);
+        done.add(id);
+      }
+      setUndoable(before);
+      setApplied(done);
+      setDraft(new Map());
+      setTick((t) => t + 1);
+    } catch (e) {
+      setError((e as Error).message);
+      /* Partial application is still application: what went in stays in, and
+         the rest is left in the draft to fix. */
+      setDraft((current) => new Map([...current].filter(([id]) => !done.has(id))));
+      setApplied(done);
+      setTick((t) => t + 1);
+    }
+  };
+
+  const undo = () => {
+    if (!undoable) return;
+    setError(null);
+    try {
+      for (const [id, raw] of undoable) {
+        const [varScope, name] = id.split(/:(.+)/) as ['stat' | 'temp', string];
+        if (raw === '') continue;
+        writeVar(name, varScope, raw);
+      }
+      trace('note', `god mode: undid ${undoable.size} change${undoable.size === 1 ? '' : 's'}`);
+      setUndoable(null);
+      setApplied(new Set());
       setTick((t) => t + 1);
     } catch (e) {
       setError((e as Error).message);
     }
-  }, []);
+  };
 
   return (
     <aside className="app-inspector" aria-label="God mode">
@@ -172,12 +248,52 @@ export function GodMode({
         <input
           className="app-input"
           type="search"
-          placeholder="Filter"
+          placeholder={useRegex ? 'Pattern' : 'Filter'}
           aria-label="Filter variables"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
       </div>
+
+      {/* Collapsed by default: the plain filter answers most questions, and a
+          row of switches above the list would cost more than it earns. */}
+      <details className="god-advanced" open={advanced} onToggle={(e) => setAdvanced(e.currentTarget.open)}>
+        <summary>Advanced search</summary>
+        <label>
+          <span>Type</span>
+          <select className="app-input" value={type} onChange={(e) => setType(e.target.value as VarType)}>
+            <option value="any">Any</option>
+            <option value="number">Number</option>
+            <option value="boolean">True / false</option>
+            <option value="text">Text</option>
+          </select>
+        </label>
+        <label>
+          <span>Scope</span>
+          <select
+            className="app-input"
+            value={scope}
+            onChange={(e) => setScope(e.target.value as 'any' | 'stat' | 'temp')}
+          >
+            <option value="any">Any</option>
+            <option value="stat">Permanent</option>
+            <option value="temp">Temporary</option>
+          </select>
+        </label>
+        <label className="god-switch">
+          <input type="checkbox" checked={useRegex} onChange={(e) => setUseRegex(e.target.checked)} />
+          Regular expression
+        </label>
+        <label className="god-switch">
+          <input
+            type="checkbox"
+            checked={caseSensitive}
+            onChange={(e) => setCaseSensitive(e.target.checked)}
+          />
+          Case sensitive
+        </label>
+        {regexError && <p className="app-note">{regexError}</p>}
+      </details>
 
       <div className="app-inspector-body">
         {error && (
@@ -188,36 +304,84 @@ export function GodMode({
 
         {!shown.length ? (
           <p className="app-note">
-            {view === 'sheet'
-              ? 'This game declares no *stat_chart, so there is no sheet to show. Try All.'
-              : 'No variables match.'}
+            {view === 'sheet' && !scene.referenced.length
+              ? 'This game has no choicescript_stats scene. Try All.'
+              : 'Nothing matches.'}
           </p>
         ) : (
           <table className="god-table">
             <tbody>
-              {shown.map((variable) => (
-                <tr key={`${variable.scope}:${variable.name}`}>
-                  <th scope="row">
-                    <span className="god-name">{variable.label ?? variable.name}</span>
-                    {/* Both names, always: the author's label is what the sheet
-                        shows, the variable name is what *if reads. */}
-                    <code className="god-var">
-                      {variable.name}
-                      {variable.scope === 'temp' && <em> temp</em>}
-                    </code>
-                  </th>
-                  <td>
-                    <Value variable={variable} onEdit={(raw) => edit(variable, raw)} />
-                  </td>
-                </tr>
-              ))}
+              {shown.map((variable) => {
+                const id = key(variable);
+                const status = statusOf(variable);
+                return (
+                  <tr key={id} data-status={status} data-missing={!!variable.missing}>
+                    <th scope="row">
+                      <span className="god-name">{variable.label ?? variable.name}</span>
+                      <code className="god-var">
+                        {variable.name}
+                        {variable.scope === 'temp' && <em> temp</em>}
+                        {variable.missing && <em> not created</em>}
+                      </code>
+                    </th>
+                    <td>
+                      {variable.missing ? (
+                        <span className="god-absent">—</span>
+                      ) : typeOf(variable.value) === 'boolean' ? (
+                        <button
+                          className="app-btn god-bool"
+                          aria-pressed={(draft.get(id) ?? show(variable.value)) === 'true'}
+                          onClick={() =>
+                            edit(
+                              variable,
+                              (draft.get(id) ?? show(variable.value)) === 'true' ? 'false' : 'true',
+                            )
+                          }
+                        >
+                          {draft.get(id) ?? show(variable.value)}
+                        </button>
+                      ) : (
+                        <input
+                          className="app-input god-value"
+                          inputMode={typeOf(variable.value) === 'number' ? 'decimal' : 'text'}
+                          value={draft.get(id) ?? show(variable.value)}
+                          onChange={(e) => edit(variable, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') apply();
+                            if (e.key === 'Escape') edit(variable, show(variable.value));
+                          }}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
+      </div>
 
-        <p className="app-note mt-3">
-          Changes apply immediately and show on the next screen the story draws.
-        </p>
+      {/* The commit bar. Present always, so the model is visible before anything
+          has been typed: edits here are a draft until applied. */}
+      <div className="god-commit">
+        <span className="god-count">
+          {draft.size
+            ? `${draft.size} change${draft.size === 1 ? '' : 's'} pending`
+            : applied.size
+              ? `${applied.size} applied`
+              : 'No changes'}
+        </span>
+        {undoable && !draft.size && (
+          <button className="app-btn" onClick={undo} title="Undo the last apply">
+            <Undo2 className="size-3.5" aria-hidden /> Undo
+          </button>
+        )}
+        <button className="app-btn" disabled={!draft.size} onClick={() => setDraft(new Map())}>
+          <X className="size-3.5" aria-hidden /> Cancel
+        </button>
+        <button className="app-btn app-btn-primary" disabled={!draft.size} onClick={apply}>
+          <Check className="size-3.5" aria-hidden /> Apply
+        </button>
       </div>
       {children}
     </aside>

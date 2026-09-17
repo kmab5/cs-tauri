@@ -13,7 +13,19 @@
 import { useState } from 'react';
 
 import { DialogPanel } from '@/components/ui/dialog';
-import { THEMES, applyTheme, getTheme, getZoom, setTheme, setZoom } from '@/lib/theme';
+import {
+  FACE_WEIGHTS,
+  THEMES,
+  applyTheme,
+  getFace,
+  getTheme,
+  getWeight,
+  getZoom,
+  setFace,
+  setTheme,
+  setWeight,
+  setZoom,
+} from '@/lib/theme';
 import { canToggleAuthorMode, isAuthorMode, setAuthorMode } from '@/lib/author/mode';
 import { cn } from '@/lib/utils';
 
@@ -66,6 +78,9 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
   const [theme, setThemeState] = useState(getTheme);
   const [zoom, setZoomState] = useState(() => String(getZoom()));
   const [author, setAuthorState] = useState(isAuthorMode);
+  const [face, setFaceState] = useState(getFace);
+  const [weight, setWeightState] = useState(() => getWeight());
+  const range = FACE_WEIGHTS[face];
 
   return (
     <DialogPanel open title="Settings" onOpenChange={(v) => !v && onClose()}>
@@ -79,6 +94,54 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
           setThemeState(id);
         }}
       />
+      <Chips
+        legend="Typeface"
+        items={[
+          { id: 'serif', label: 'Serif', hint: 'Fraunces' },
+          { id: 'sans', label: 'Sans', hint: 'Google Sans' },
+          { id: 'humanist', label: 'Humanist', hint: 'Kanit' },
+          { id: 'slab', label: 'Slab', hint: 'Sanchez' },
+          { id: 'mono', label: 'Mono', hint: 'JetBrains Mono' },
+          { id: 'dyslexia', label: 'OpenDyslexic', hint: 'weighted baselines' },
+        ]}
+        current={face}
+        onPick={(id) => {
+          setFace(id);
+          setFaceState(id);
+          setWeightState(getWeight(id));
+          applyTheme();
+        }}
+      />
+
+      {/* Only where the family can actually take a range. The four static
+          families get their two real weights rather than a slider that
+          synthesises the rest. */}
+      {range && (
+        <fieldset className="mb-5 border-0 p-0">
+          <legend className="mb-2 font-ui text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            Weight
+          </legend>
+          <div className="flex items-center gap-3">
+            <input
+              className="flex-1"
+              type="range"
+              min={range.min}
+              max={range.max}
+              step={range.step}
+              value={weight}
+              aria-label="Reading weight"
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                setWeight(value, face);
+                setWeightState(value);
+                applyTheme();
+              }}
+            />
+            <span className="font-mono text-sm tabular-nums text-ink-muted">{weight}</span>
+          </div>
+        </fieldset>
+      )}
+
       <Chips
         legend="Text size"
         items={ZOOMS}

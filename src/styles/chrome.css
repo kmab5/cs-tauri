@@ -82,6 +82,13 @@ body {
   --app-rail-w: 220px;
 
   --app-font-ui: system-ui, sans-serif;
+
+  /* Two semantic hues, for states that are about *change* rather than about
+     the theme: amber for pending, green for done. Everything else in the
+     chrome derives from the reading theme; these two cannot, because "altered"
+     has to look like altered in all six themes. */
+  --tertiary: #f5c451;
+  --secondary: #3de08a;
 }
 
 /* Platform faces. The reading surface keeps the engine's serif families; only
@@ -1934,4 +1941,139 @@ kbd,
  */
 [aria-pressed='true'] .app-chip-hint {
   color: color-mix(in srgb, var(--app-accent-fg) 78%, transparent);
+}
+
+/* -------------------------------------------------- god mode: diff states */
+
+/*
+ * The colours are a diff's, because that is the model: amber for a change you
+ * have made but not committed, green for one just committed, nothing for
+ * untouched. Mixed into the theme's own surfaces rather than fixed hues, so
+ * they survive Terminal and Paperback alike, and paired with a left marker so
+ * the state does not rest on colour alone.
+ */
+.god-table tr[data-status='altered'] {
+  background: color-mix(in srgb, var(--tertiary, #f5c451) 16%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--tertiary, #f5c451) 70%, transparent);
+}
+.god-table tr[data-status='applied'] {
+  background: color-mix(in srgb, var(--secondary, #3de08a) 14%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--secondary, #3de08a) 70%, transparent);
+}
+.god-table tr[data-status='altered'] .god-value {
+  border-color: color-mix(in srgb, var(--tertiary, #f5c451) 60%, var(--app-border));
+}
+.god-table tr[data-missing='true'] .god-name {
+  color: var(--app-label-dim);
+}
+.god-absent {
+  display: block;
+  color: var(--app-label-dim);
+  text-align: right;
+}
+
+.god-commit {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--app-1);
+  border-top: 1px solid var(--app-border);
+  padding: var(--app-2);
+}
+.god-count {
+  margin-right: auto;
+  color: var(--app-label-dim);
+  font-family: var(--app-font-ui);
+  font-size: var(--app-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.god-advanced {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--app-border);
+  padding: 0 var(--app-2) var(--app-2);
+  font-family: var(--app-font-ui);
+  font-size: var(--app-text-md);
+}
+.god-advanced summary {
+  padding: var(--app-2) 0;
+  color: var(--app-label-dim);
+  font-size: var(--app-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: default;
+}
+.god-advanced label {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--app-2);
+  margin-bottom: var(--app-1);
+}
+.god-advanced label > span {
+  color: var(--app-label-dim);
+}
+.god-advanced .god-switch {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--app-2);
+}
+
+/* ------------------------------------------------------- context menus */
+
+.ctx {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  min-width: 11rem;
+  max-width: 20rem;
+  overflow: hidden;
+  border: 1px solid var(--app-border-strong);
+  border-radius: var(--app-radius-lg);
+  background: var(--app-chrome);
+  box-shadow: var(--app-shadow);
+  padding: var(--app-1);
+  font-family: var(--app-font-ui);
+}
+.ctx-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--app-3);
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  padding: var(--app-1) var(--app-2);
+  color: var(--app-label);
+  font: inherit;
+  font-size: var(--app-text-md);
+  text-align: left;
+  cursor: default;
+}
+.ctx-item span {
+  flex: 1;
+}
+.ctx-item[data-active='true']:not(:disabled) {
+  background: var(--app-accent);
+  color: var(--app-accent-fg);
+}
+.ctx-item[data-active='true'] kbd {
+  border-color: color-mix(in srgb, var(--app-accent-fg) 40%, transparent);
+  background: transparent;
+  color: var(--app-accent-fg);
+}
+.ctx-item:disabled {
+  color: var(--app-label-dim);
+}
+/* Destructive items read as destructive before they are hovered, not after. */
+.ctx-item[data-danger='true']:not(:disabled) {
+  color: color-mix(in srgb, var(--tertiary) 45%, var(--app-label));
+}
+.ctx-item[data-danger='true'][data-active='true'] {
+  background: color-mix(in srgb, var(--tertiary) 70%, var(--app-accent));
+  color: var(--bg, #0e0e11);
+}
+.ctx-divider {
+  margin: var(--app-1) 0;
+  border: 0;
+  border-top: 1px solid var(--app-border);
 }

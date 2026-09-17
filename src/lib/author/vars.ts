@@ -27,6 +27,8 @@ export interface GameVar {
   label?: string;
   /** Engine bookkeeping rather than the author's own variable. */
   internal: boolean;
+  /** Named by the stats scene but never created by the game. */
+  missing?: boolean;
 }
 
 /** Keys the engine keeps in `stats` for itself. */
@@ -75,6 +77,59 @@ function sceneObject(): SceneLike | null {
  * blocks. Indented rows under the command, one variable per row, with an
  * optional label after it.
  */
+export interface StatsScene {
+  /** Variable name to the author's display label, from *stat_chart rows. */
+  labels: Map<string, string>;
+  /** Every variable the stats scene mentions anywhere, in first-seen order. */
+  referenced: string[];
+}
+
+/** Reserved words that appear in conditions but are not variables. */
+const KEYWORDS = new Set([
+  'and', 'or', 'not', 'true', 'false', 'modulo', 'round', 'length', 'auto',
+  'if', 'elseif', 'elsif', 'else', 'selectable_if', 'set', 'temp', 'create',
+  'hide_reuse', 'disable_reuse', 'allow_reuse', 'fairmath', 'timestamp',
+]);
+
+/**
+ * Everything the stats scene touches, not just its chart.
+ *
+ * Reading only `*stat_chart` was the bug: a stats screen is a scene, and most
+ * of them do far more than draw a chart. They branch on variables with `*if`,
+ * interpolate them with `${}` and `@{}`, compute intermediates with `*temp`,
+ * and describe them in prose. None of that appeared in god mode's sheet, which
+ * is why variables the author was plainly using were missing from it.
+ *
+ * Order matters and is preserved: chart rows first, in the author's own order,
+ * then everything else as the scene mentions it. The sheet then reads the way
+ * the author wrote it.
+ */
+export function parseStatsScene(text: string): StatsScene {
+  const labels = parseStatChart(text);
+  const referenced: string[] = [...labels.keys()];
+  const add = (name: string) => {
+    const key = name.toLowerCase();
+    if (!key || KEYWORDS.has(key) || /^\d/.test(key)) return;
+    if (!referenced.includes(key)) referenced.push(key);
+  };
+
+  for (const line of text.split('\n')) {
+    /* ${var} and @{var …} interpolations, including ${var[i]}. */
+    for (const m of line.matchAll(/[$@]!*!*\{\s*([A-Za-z_][A-Za-z0-9_]*)/g)) add(m[1]);
+
+    const command = /^\s*\*([a-z_]+)\s*(.*)$/i.exec(line);
+    if (!command) continue;
+    const [, verb, rest] = command;
+
+    /* Expressions: every identifier in them is a variable or a keyword. */
+    if (/^(if|elseif|elsif|selectable_if|set|temp|create|rand|input_text|input_number|print|stat_chart|goto_random_scene)$/i.test(verb)) {
+      for (const m of rest.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g)) add(m[1]);
+    }
+  }
+
+  return { labels, referenced };
+}
+
 export function parseStatChart(statsScene: string): Map<string, string> {
   const labels = new Map<string, string>();
   const lines = statsScene.split('\n');
@@ -127,13 +182,28 @@ export function readVars(labels: Map<string, string>): GameVar[] {
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Only the variables the author put on the character sheet, in that order. */
-export function readSheet(labels: Map<string, string>): GameVar[] {
-  const all = readVars(labels);
-  const order = [...labels.keys()];
-  return all
-    .filter((v) => labels.has(v.name.toLowerCase()))
-    .sort((a, b) => order.indexOf(a.name.toLowerCase()) - order.indexOf(b.name.toLowerCase()));
+/**
+ * The variables the stats scene uses, in the order it uses them.
+ *
+ * A name the scene mentions but the game has not created yet is listed too,
+ * with no value — that is information, not noise: a stats screen referring to a
+ * variable that does not exist is a bug the author wants to see.
+ */
+export function readSheet(scene: StatsScene): GameVar[] {
+  const all = readVars(scene.labels);
+  const byName = new Map(all.map((v) => [v.name.toLowerCase(), v]));
+
+  return scene.referenced.map(
+    (name) =>
+      byName.get(name) ?? {
+        name,
+        value: undefined,
+        scope: 'stat' as VarScope,
+        label: scene.labels.get(name),
+        internal: false,
+        missing: true,
+      },
+  );
 }
 
 /** A string the engine is using as a number — `*create warmth 40` gives "40". */

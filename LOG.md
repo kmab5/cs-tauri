@@ -5,6 +5,117 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 19 — v0.3.3, the five, and a landing page
+
+All five implemented, achievement analysis skipped as instructed.
+
+### God mode is a diff now
+
+Nothing reaches the interpreter as you type. Edits collect as a draft, changed
+rows go amber with a left marker, **Apply** commits them, applied rows go green,
+and there is one level of undo. Cancel drops the draft.
+
+Two details worth recording:
+
+- **The undo snapshot is taken from the interpreter, not the draft.** At apply
+  time each variable's *current* value is read and kept, so undo restores what
+  was actually there rather than what the form believed. Those differ whenever
+  the story wrote to a variable between the edit and the apply.
+- **A partial apply stays partial.** If the third of five edits is rejected, the
+  first two are in, the rest stay in the draft to be fixed, and the error names
+  the one that failed. Rolling back two successful writes to be tidy would be
+  its own surprise.
+
+The state colours are a diff's, mixed into the theme's surfaces rather than
+fixed hues so they survive Terminal, and paired with a left marker so the state
+does not rest on colour alone.
+
+The harness now tests the whole cycle: type, assert the interpreter is
+**unchanged**, apply, assert it changed, undo, assert it came back.
+
+### Sheet shows what the stats scene actually uses
+
+Reading only `*stat_chart` was the bug. A stats screen is a scene, and most of
+them do far more than draw a chart: they branch with `*if`, interpolate with
+`${}` and `@{}`, compute intermediates with `*temp`. None of that appeared.
+
+The parser now collects every variable the scene mentions — chart rows first in
+the author's order, then everything else as the scene mentions it. Names the
+scene uses but the game never creates are listed too, marked *not created*, with
+no value. That is information rather than noise: a stats screen referring to a
+variable that does not exist is a bug the author wants to see.
+
+### Advanced search
+
+Collapsed under the plain filter, because the plain filter answers most
+questions and a row of switches above the list would cost more than it earns.
+Inside: type (number, true/false, text — with numeric strings counted as
+numbers, since that is how ChoiceScript stores them), scope (permanent or
+temporary), regular expressions, and case sensitivity. An unfinished pattern
+matches nothing and says why rather than throwing on a keystroke.
+
+### Context menus
+
+The webview's own menu is suppressed everywhere and replaced per region: the
+shelf background, a shelf card, the story, the panes and the titlebar, the
+console. Items are omitted rather than greyed where they do not apply, for the
+same reason a standalone build has no "Back to Library".
+
+One exception, deliberately: **editable fields keep an edit menu**. Killing the
+native menu takes cut, copy and paste with it, and a text field without those is
+broken in a way people notice in a second. Those go through the clipboard API.
+Anywhere else, a text selection gets a Copy.
+
+Keyboard-navigable, dismissed by Escape, a click elsewhere, a scroll or the
+window losing focus, and flipped inwards near an edge rather than overflowing.
+
+### Font weight
+
+A slider, per face, for the six faces with a range — eight of the bundled
+families are variable fonts, so the axis is already there. The four static
+families (Lato, Kanit, Sanchez, OpenDyslexic) get their two real weights instead
+of a slider that would quietly synthesise everything between.
+
+It is stored per face, because 500 in Fraunces is not 500 in JetBrains Mono, and
+bold derives from it — `min(900, weight + 300)` — so a reader at 300 still gets
+a bold that looks bold beside it. Settings gained a Typeface row too; the six
+faces were only reachable from inside a game before.
+
+### The landing page
+
+`docs/`, served by GitHub Pages, and **generated**: `npm run docs` writes it from
+`package.json` and the copy in `scripts/build-docs.mjs`. `npm run test:docs`
+regenerates and fails if the committed file differs, and the release workflow
+regenerates it from the tag being built — so "stays up to date" is enforced
+rather than promised.
+
+Identity: the palette and the lowercase-heading habit are kmab's (purple
+#B24BFF, green, amber, near-black, off-white, mono labels). The type is
+deliberately **not** — the page is set in Fraunces over JetBrains Mono, the
+app's own bundled faces, so it looks like the thing it is selling rather than
+like the brand kit it came from. The favicon is the app's branching-path mark in
+the brand's purple, not a copy of the lambda.
+
+It also carries the attributions this project owes: ChoiceScript and its
+licence, that games belong to their authors, and that nothing here
+redistributes them.
+
+### Verified
+
+- `npm run test:webview` — **88 passed, 0 failed** (five new: the native context
+  menu is prevented, ours opens, it has items, Escape dismisses it, and the
+  reading weight is a token)
+- `npm run test:runners` — **97 passed, 0 failed**
+- `npm run test:author` — **41 passed, 0 failed** (draft, apply, undo, advanced
+  search collapsed)
+- `npm run test:standalone` — 18 passed, 0 failed
+- `npm run test:game` — **83 passed, 0 failed** on Choice of Magics
+- docs freshness, version, theme-scope, register, stale — pass
+
+`npm test` now runs seven checks and six passes.
+
+---
+
 ## 2026-09-08 · Session 18 — v0.3.2, the tests properly, and the fonts
 
 Nine of your sixteen items. The seven left are listed at the bottom with

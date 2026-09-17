@@ -7,6 +7,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { Toaster } from './components/ui/toaster';
+import { ContextMenuProvider } from './features/menu/ContextMenu';
 import { hasTauri } from './lib/desktop';
 import './index.css';
 
@@ -32,8 +33,10 @@ if (!hasTauri()) {
 } else {
   root.render(
     <StrictMode>
-      <App />
-      <Toaster />
+      <ContextMenuProvider>
+        <App />
+        <Toaster />
+      </ContextMenuProvider>
     </StrictMode>,
   );
 }

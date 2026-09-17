@@ -38,9 +38,10 @@ import { DebugConsole } from './author/DebugConsole';
 import { isAuthorMode } from '@/lib/author/mode';
 import { installInstrumentation, removeInstrumentation, trace } from '@/lib/author/instrument';
 import { Palette, keyHint, type Command } from './Palette';
+import { DIVIDER, useContextMenu, type MenuEntry } from './menu/ContextMenu';
 import { readScroll, saveScroll, useReadingKeys } from './useReadingKeys';
 import { useAutosave } from './useAutosave';
-import { setFace, setTheme, setZoom } from '@/lib/theme';
+import { applyTheme, setFace, setTheme, setZoom } from '@/lib/theme';
 
 /** Below this the side panel would squeeze the reading measure, so it is hidden. */
 const WIDE = '(min-width: 1100px)';
@@ -126,6 +127,9 @@ function ReadingKeys({ cs, gameId }: { cs: ChoiceScriptApi; gameId: string }) {
     setTheme(state.theme.name);
     setZoom(state.theme.zoom);
     setFace(state.theme.typeface);
+    /* The weight is ours, not the engine's, and it is per face — so a face
+       changed from inside a game re-applies that face's stored weight. */
+    applyTheme();
   }, [state.theme.name, state.theme.zoom, state.theme.typeface]);
 
   /* Restored once, at the start of the session. Player scrolls each new screen
@@ -423,6 +427,54 @@ export function Shell({
     return () => document.removeEventListener('keydown', onKey);
   }, [focus]);
 
+  /* The story's menu: what a reader right-clicking the page wants, which is
+     what the titlebar offers plus a way out of focus mode. Copy is handled by
+     the provider when there is a selection. */
+  const storyMenu = useContextMenu((): MenuEntry[] =>
+    game && cs
+      ? [
+          { label: 'Stats screen', hint: keyHint('mod+shift+s'), run: () => cs.openStats() },
+          { label: 'Saves', hint: keyHint('mod+s'), run: () => cs.openSaves() },
+          { label: 'Achievements', hint: keyHint('mod+shift+a'), run: () => cs.openAchievements() },
+          DIVIDER,
+          { label: 'Reading settings', hint: keyHint('mod+,'), run: () => cs.openSettings() },
+          {
+            label: focus ? 'Leave focus mode' : 'Focus mode',
+            hint: keyHint('mod+shift+f'),
+            run: () => setFocus((on) => !on),
+          },
+          DIVIDER,
+          { label: 'Command palette', hint: keyHint('mod+k'), run: () => setPalette(true) },
+          ...(standalone
+            ? []
+            : [
+                DIVIDER,
+                { label: 'Back to the library', hint: keyHint('mod+shift+l'), run: onExit },
+              ]),
+        ]
+      : [],
+  );
+
+  /* The panes: sizing and visibility, which is what a right-click on a divider
+     or a panel header is asking about. */
+  const paneMenu = useContextMenu((): MenuEntry[] => [
+    { label: sidebar ? 'Hide sidebar' : 'Show sidebar', hint: keyHint('mod+\\'), run: () => setSidebar((v) => !v) },
+    { label: 'Reset sidebar width', run: () => setWidth(260) },
+    ...(wide
+      ? [
+          DIVIDER,
+          { label: docked ? 'Hide the side panel' : 'Show the side panel', hint: keyHint('mod+i'), run: () => setInspector((v) => !v) },
+          { label: 'Reset panel width', run: () => setRightWidth(320) },
+        ]
+      : []),
+    ...(author && game
+      ? [
+          DIVIDER,
+          { label: console_ ? 'Hide the trace console' : 'Show the trace console', hint: keyHint('mod+shift+d'), run: () => setConsole((v) => !v) },
+        ]
+      : []),
+  ]);
+
   return (
     <div className="app-shell" data-focus={focus}>
       {/* Before everything, reachable only by keyboard. */}
@@ -431,13 +483,18 @@ export function Shell({
       </a>
 
       {game && !focus && sidebar && (
-        <GamePanel game={game} cs={cs} onExit={standalone ? null : onExit}>
+        <GamePanel
+          game={game}
+          cs={cs}
+          onExit={standalone ? null : onExit}
+          onContextMenu={paneMenu}
+        >
           <Resizer edge="left" label="Resize the sidebar" onWidth={resize} />
         </GamePanel>
       )}
 
       <div className="app-main">
-        <header className="app-titlebar" data-tauri-drag-region>
+        <header className="app-titlebar" data-tauri-drag-region onContextMenu={paneMenu}>
           {game && (
             <button
               className="app-btn"
@@ -532,7 +589,7 @@ export function Shell({
           </div>
         </header>
 
-        <main className="app-reading" id="story" tabIndex={-1}>
+        <main className="app-reading" id="story" tabIndex={-1} onContextMenu={storyMenu}>
           {game && cs ? (
             <div className="app-measure">
               <ReadingKeys cs={cs} gameId={game.id} />

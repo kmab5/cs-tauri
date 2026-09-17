@@ -565,20 +565,51 @@ server.listen(PORT, async () => {
             win.HTMLInputElement.prototype,
             'value',
           ).set;
+          const before = String(win.stats.warmth);
           setValue.call(field, '99');
           field.dispatchEvent(new win.Event('input', { bubbles: true }));
-          /* React maps onBlur to focusout, which bubbles; a plain 'blur' event
-             never reaches its root listener. */
-          field.dispatchEvent(new win.FocusEvent('focusout', { bubbles: true }));
-          await new Promise((r) => setTimeout(r, 300));
-          ok('editing it writes through to the interpreter',
-            Number(win.stats.warmth) === 99, String(win.stats && win.stats.warmth));
-          /* ChoiceScript stores numbers as strings, so the assertion is that
-             the representation the interpreter uses is preserved — not that it
-             becomes a JS number. */
-          ok('and it keeps the engine\'s own representation',
-            typeof win.stats.warmth === typeof 'string',
-            typeof (win.stats && win.stats.warmth));
+          await new Promise((r) => setTimeout(r, 250));
+
+          /* The point of the draft model: typing changes nothing yet. */
+          ok('typing does not touch the interpreter',
+            String(win.stats.warmth) === before, String(win.stats.warmth));
+          ok('the row is marked as altered',
+            !!d.querySelector('.god-table tr[data-status=altered]'));
+          ok('a pending count is shown',
+            /pending/.test(d.querySelector('.god-count')?.textContent || ''),
+            d.querySelector('.god-count')?.textContent);
+
+          const applyBtn = Array.prototype.slice
+            .call(d.querySelectorAll('.god-commit button'))
+            .find((b) => /Apply/.test(b.textContent));
+          ok('there is an apply button', !!applyBtn);
+          if (applyBtn) {
+            applyBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+            await new Promise((r) => setTimeout(r, 350));
+            ok('applying writes through to the interpreter',
+              Number(win.stats.warmth) === 99, String(win.stats.warmth));
+            /* ChoiceScript stores numbers as strings, so what is asserted is
+               that the interpreter's own representation is preserved. */
+            ok('and it keeps the engine\'s own representation',
+              typeof win.stats.warmth === typeof 'string', typeof win.stats.warmth);
+            ok('the row turns applied',
+              !!d.querySelector('.god-table tr[data-status=applied]'));
+
+            const undoBtn = Array.prototype.slice
+              .call(d.querySelectorAll('.god-commit button'))
+              .find((b) => /Undo/.test(b.textContent));
+            ok('one undo is offered', !!undoBtn);
+            if (undoBtn) {
+              undoBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+              await new Promise((r) => setTimeout(r, 350));
+              ok('undo puts the old value back',
+                String(win.stats.warmth) === before, String(win.stats.warmth));
+            }
+          }
+
+          ok('advanced search is there but collapsed',
+            !!d.querySelector('.god-advanced') &&
+              !d.querySelector('.god-advanced[open]'));
         }
       }
     } else {
@@ -960,6 +991,23 @@ server.listen(PORT, async () => {
     !save || win.getComputedStyle(save).borderLeftWidth !== '3px',
     save ? win.getComputedStyle(save).borderLeftWidth : 'no saves yet');
 
+  console.log('\nthe app has its own context menus');
+  /* The webview's own menu is suppressed everywhere; a right-click either gets
+     one of ours or nothing, never the browser's. */
+  const shelf = d.querySelector('.lib-shell') || d.querySelector('.app-reading');
+  if (shelf) {
+    const event = new win.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 });
+    shelf.dispatchEvent(event);
+    await new Promise((r) => setTimeout(r, 250));
+    ok('the native menu is prevented', event.defaultPrevented);
+    ok('ours opens instead', !!d.querySelector('.ctx[role=menu]'));
+    const items = d.querySelectorAll('.ctx-item');
+    ok('with items for where it was clicked', items.length > 0, items.length + ' items');
+    win.document.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await new Promise((r) => setTimeout(r, 250));
+    ok('escape dismisses it', !d.querySelector('.ctx[role=menu]'));
+  }
+
   console.log('\nthe reading faces are packaged');
   const face = () => win.getComputedStyle(d.body).getPropertyValue('--cs-font-body').trim();
   ok('the default face is the packaged serif', /Fraunces/.test(face()), face().slice(0, 60));
@@ -970,6 +1018,10 @@ server.listen(PORT, async () => {
   win.ChoiceScript.setTypeface('humanist');
   await new Promise((r) => setTimeout(r, 250));
   ok('each face resolves to a bundled family', /Kanit/.test(face()), face().slice(0, 60));
+  /* The weight is a variable the reading surface reads, set per face. */
+  ok('the reading weight is a token, not a fixed 400',
+    win.getComputedStyle(d.body).getPropertyValue('--cs-weight-body').trim() !== '',
+    win.getComputedStyle(d.body).getPropertyValue('--cs-weight-body'));
   win.ChoiceScript.setTypeface('serif');
   await new Promise((r) => setTimeout(r, 200));
 

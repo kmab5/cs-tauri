@@ -1,7 +1,7 @@
 {
   "name": "cs-tauri",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "description": "A ChoiceScript player for the desktop. Games and saves stay on your own machine.",
   "scripts": {
@@ -14,7 +14,7 @@
     "tauri:build": "tauri build",
     "cs:export": "node scripts/cs-export.mjs",
     "fmt:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml",
-    "test": "npm run build && npm run test:version && npm run test:theme && npm run test:register && npm run test:webview && npm run test:standalone && npm run test:author && npm run test:runners && npm run test:rust",
+    "test": "npm run build && npm run test:version && npm run test:docs && npm run test:theme && npm run test:register && npm run test:webview && npm run test:standalone && npm run test:author && npm run test:runners && npm run test:rust",
     "test:version": "node scripts/check-version.mjs",
     "test:theme": "node check-theme-scope.cjs",
     "test:register": "node scripts/check-register.mjs",
@@ -23,7 +23,9 @@
     "test:rust": "cd src-tauri && cargo test",
     "test:standalone": "node scripts/test-webview.cjs --standalone",
     "test:author": "node scripts/test-webview.cjs --standalone --author",
-    "test:runners": "node scripts/test-webview.cjs --author"
+    "test:runners": "node scripts/test-webview.cjs --author",
+    "docs": "node scripts/build-docs.mjs",
+    "test:docs": "node scripts/check-docs.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",

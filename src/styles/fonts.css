@@ -286,6 +286,19 @@ html body.dyslexia {
  * The mono family is also what the chrome's code, key hints and the trace
  * console use, so it is packaged rather than borrowed from the platform.
  */
+/*
+ * The reading weight, as a variable font axis where there is one. Bold is
+ * derived from it rather than fixed at 700, so a reader who has moved the
+ * weight to 300 still gets a bold that looks bold beside it.
+ */
+html body {
+  font-weight: var(--cs-weight-body, 400);
+}
+html body strong,
+html body b {
+  font-weight: min(900, calc(var(--cs-weight-body, 400) + 300));
+}
+
 html body {
   --cs-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }

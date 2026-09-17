@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.3.2` reads as **major release · major update · session**. `package.json` is
+`0.3.3` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -219,6 +219,19 @@ Two other notes worth knowing: Fraunces carries an optical-size axis from 9 to
 and Sanchez ships no bold, so bold is synthesised with Roboto Slab behind it in
 the stack.
 
+## The landing page
+
+`docs/` is served by GitHub Pages and **generated** — `npm run docs` writes it
+from `package.json` and the copy in `scripts/build-docs.mjs`. `npm run test:docs`
+fails if the committed page has drifted, and the release workflow regenerates it
+from the tag being built, so the page and the release it links to come from the
+same commit. A hand-written landing page is out of date by the second release.
+
+Palette and the lowercase-heading habit come from
+[kmab-brand](https://github.com/kmab5/kmab-brand); the type deliberately does
+not — the page is set in the app's own bundled faces, so it looks like the
+thing it is selling.
+
 ## The theme-scope trap
 
 Worth reading before touching `index.css`.
@@ -381,9 +394,13 @@ Settings ▸ Mode ▸ Author, or `cs:export --author` for an exported story. It 
 two surfaces to a running game and instruments the interpreter; a reader's
 install is untouched until they ask for it.
 
-**God mode** — the game's variables, editable, in two views. *Sheet* is the rows
-of `*stat_chart` in `choicescript_stats.txt` with the author's display label
-beside the variable name, in the author's order. *All* is every permanent
+**God mode** — the game's variables, edited like a diff: nothing reaches the
+interpreter until **Apply**, changed rows are amber, applied rows green, and
+there is one level of undo. Two views. *Sheet* is everything
+`choicescript_stats` uses — chart rows, `*if` conditions, `${}` interpolations,
+`*temp` intermediates — in the order the scene uses them, labelled where the
+author labelled it, with names it mentions but never creates marked as missing.
+Advanced search adds type and scope filters and regular expressions. *All* is every permanent
 variable and every temp, with the engine's own bookkeeping behind a toggle.
 Writes go into the interpreter's own objects and keep the representation it
 uses — ChoiceScript stores numbers as strings, so a numeric stat stays a

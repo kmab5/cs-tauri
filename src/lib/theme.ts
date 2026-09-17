@@ -34,7 +34,25 @@ export const THEMES: ThemeChoice[] = [
   { id: 'ember', label: 'Ember', hint: 'Dark slate, warm amber' },
 ];
 
+/**
+ * The weight range each packaged face can actually take.
+ *
+ * Eight of the bundled families are variable fonts, so their whole range is
+ * one file and a slider is honest. Lato, Kanit, Sanchez and OpenDyslexic ship
+ * statics, so they get the two weights that exist rather than a slider that
+ * quietly synthesises everything in between.
+ */
+export const FACE_WEIGHTS: Record<string, { min: number; max: number; step: number }> = {
+  serif: { min: 300, max: 900, step: 25 },
+  sans: { min: 300, max: 800, step: 25 },
+  humanist: { min: 400, max: 700, step: 300 },
+  slab: { min: 400, max: 700, step: 300 },
+  mono: { min: 300, max: 800, step: 25 },
+  dyslexia: { min: 400, max: 700, step: 300 },
+};
+
 const THEME_KEY = 'cs-app-theme';
+const WEIGHT_KEY = 'cs-app-weight';
 const ZOOM_KEY = 'cs-app-zoom';
 const FACE_KEY = 'cs-app-face';
 
@@ -44,6 +62,18 @@ export function getFace(): string {
 
 export function setFace(id: string) {
   localStorage.setItem(FACE_KEY, id);
+}
+
+/** Per-face, because 500 in Fraunces is not 500 in JetBrains Mono. */
+export function getWeight(face = getFace()): number {
+  const stored = Number(localStorage.getItem(`${WEIGHT_KEY}-${face}`));
+  const range = FACE_WEIGHTS[face];
+  if (!range) return 400;
+  return Number.isFinite(stored) && stored >= range.min && stored <= range.max ? stored : 400;
+}
+
+export function setWeight(value: number, face = getFace()) {
+  localStorage.setItem(`${WEIGHT_KEY}-${face}`, String(value));
 }
 
 /**
@@ -105,4 +135,11 @@ export function applyTheme() {
   if (face === 'sans' || face === 'dyslexia') body.classList.add(face);
 
   document.documentElement.style.fontSize = `${getZoom() * 100}%`;
+
+  /*
+   * The weight goes on a variable the reading surface reads, not on body's
+   * font-weight directly: headings and bold spans have their own weights and
+   * should shift with the setting rather than be flattened by it.
+   */
+  body.style.setProperty('--cs-weight-body', String(getWeight(face)));
 }

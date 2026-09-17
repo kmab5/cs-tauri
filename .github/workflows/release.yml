@@ -50,6 +50,11 @@ jobs:
         shell: bash
         run: echo "value=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
+      # The landing page carries the version and the download links, so it is
+      # regenerated from the tag being built rather than trusted to be current.
+      - name: Regenerate the landing page
+        run: npm run docs
+
       - name: Test
         run: |
           npm run build
