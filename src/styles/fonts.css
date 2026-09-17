@@ -190,17 +190,48 @@
 }
 
 /*
- * OpenDyslexic is not here, and cannot be: it was not in the archive, and the
- * engine's hint claiming "OpenDyslexic" has been describing a font the project
- * never shipped. `local()` means a system install is used if the reader has
- * one; otherwise the stack falls through to Nunito, which of everything bundled
- * has the highest x-height and the most open apertures.
+ * OpenDyslexic, now actually packaged — four faces, already woff2 upstream, so
+ * they are copied rather than converted. Regular, italic, bold and bold italic:
+ * the whole point of the face is the weighted baselines, and a synthesised bold
+ * smears them.
+ *
+ * `local()` stays first in the src list so a reader who has installed the font
+ * system-wide gets their own copy, which may be a newer version than this.
  */
 @font-face {
   font-family: 'OpenDyslexic';
-  src: local('OpenDyslexic'), local('OpenDyslexic Regular'), local('Open Dyslexic');
+  src:
+    local('OpenDyslexic'),
+    local('OpenDyslexic Regular'),
+    url('../fonts/opendyslexic-400.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('../fonts/opendyslexic-400i.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src:
+    local('OpenDyslexic Bold'),
+    url('../fonts/opendyslexic-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: url('../fonts/opendyslexic-700i.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
   font-display: swap;
 }
 

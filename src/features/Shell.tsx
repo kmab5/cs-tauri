@@ -9,13 +9,12 @@
  * share one handler registry (lib/desktop/menu.ts) rather than three code paths
  * that drift apart.
  */
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
   BarChart3,
   Bookmark,
   Bug,
-  FlaskConical,
   Sparkles,
   Command as CommandIcon,
   Maximize2,
@@ -36,7 +35,6 @@ import { AchievementsPanel } from './AchievementsPanel';
 import { AppSettings } from './AppSettings';
 import { GodMode } from './author/GodMode';
 import { DebugConsole } from './author/DebugConsole';
-import { TestRunner } from './author/TestRunner';
 import { isAuthorMode } from '@/lib/author/mode';
 import { installInstrumentation, removeInstrumentation, trace } from '@/lib/author/instrument';
 import { Palette, keyHint, type Command } from './Palette';
@@ -104,9 +102,27 @@ function ReadingKeys({ cs, gameId }: { cs: ChoiceScriptApi; gameId: string }) {
     );
   }, [state.history, state.pending]);
 
-  /* The engine's settings dialog is the other way these change. Mirroring them
-     back is what lets the library page match the game the reader just left. */
+  /*
+   * The engine's settings dialog is the other way these change, so they are
+   * mirrored back into the central store.
+   *
+   * The first emission is skipped, and that is the whole fix for the theme
+   * jumping about between games. The engine persists its own `preferredTheme`
+   * in each game's save store and applies it as it boots — so opening game B
+   * briefly reported B's old theme, this effect wrote that into the central
+   * store, and the app had as many themes as it had games. There is one theme;
+   * the engine is told it on open, and only a change the reader makes *after*
+   * that counts.
+   */
+  const synced = useRef(false);
   useEffect(() => {
+    synced.current = false;
+  }, [cs]);
+  useEffect(() => {
+    if (!synced.current) {
+      synced.current = true;
+      return;
+    }
     setTheme(state.theme.name);
     setZoom(state.theme.zoom);
     setFace(state.theme.typeface);
@@ -279,7 +295,6 @@ export function Shell({
      reading one. */
   const [panel, setPanel] = useState<'achievements' | 'god'>('achievements');
   const [console_, setConsole] = useState(false);
-  const [tests, setTests] = useState(false);
   const author = isAuthorMode();
   const [width, setWidth] = useState(() => {
     const stored = Number(localStorage.getItem(SIDEBAR.key));
@@ -395,7 +410,6 @@ export function Shell({
       game && cs ? (wide ? setInspector((on) => !on) : cs.openAchievements()) : undefined,
     'toggle-focus': () => game && setFocus((on) => !on),
     console: () => author && game && setConsole((v) => !v),
-    tests: () => author && game && setTests(true),
     library: () => (game && !standalone ? onExit() : undefined),
     /* On the library page Settings means the app's settings, not a running
        game's — there is no game to restart or save. */
@@ -441,6 +455,15 @@ export function Shell({
             {game?.author && <span>{game.author}</span>}
           </h1>
 
+          {/* Which mode this is, always visible. God mode and a trace console
+              change what the app is for, and a reader who switched it on a week
+              ago should not have to open settings to find out. */}
+          {author && (
+            <span className="app-mode" title="Author mode: god mode, trace console, testing">
+              Author
+            </span>
+          )}
+
           <div className="flex items-center gap-0.5" data-tauri-drag-region="false">
             {/* The palette is the discoverable route to everything else, so it
                 is the one control that is always here. */}
@@ -469,14 +492,6 @@ export function Shell({
                       }}
                     >
                       <Sparkles className="size-3.5" aria-hidden />
-                    </button>
-                    <button
-                      className="app-btn"
-                      aria-label="Test this game"
-                      title={`Quicktest and randomtest (${keyHint('mod+shift+t')})`}
-                      onClick={() => setTests(true)}
-                    >
-                      <FlaskConical className="size-3.5" aria-hidden />
                     </button>
                     <button
                       className="app-btn"
@@ -556,7 +571,6 @@ export function Shell({
       )}
 
       <Palette open={palette} onOpenChange={setPalette} commands={commands} />
-      {author && tests && cs && <TestRunner cs={cs} onClose={() => setTests(false)} />}
       {appSettings && <AppSettings onClose={() => setAppSettings(false)} />}
     </div>
   );

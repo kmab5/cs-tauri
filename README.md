@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.3.1` reads as **major release · major update · session**. `package.json` is
+`0.3.2` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -390,20 +390,18 @@ uses — ChoiceScript stores numbers as strings, so a numeric stat stays a
 numeric string, and refuses a non-numeric input rather than quietly turning
 `*if warmth > 50` into a string comparison.
 
-**Quicktest and randomtest** (`⌘⇧T`) — the two tools from the upstream
-ChoiceScript repository, which this engine references but never shipped.
-Quicktest is deterministic and covers options: a baseline that always takes the
-first option, then one run per option discovered, each following the baseline to
-that choice before deviating. Randomtest plays whole games at random from a
-seed, and the seed is the point — a crash on iteration 47 of seed 12345 can be
-replayed exactly. Iterations, seed, avoid-used-options, log prose, log choices,
-loop guard and input values are all controls. Every failure is reported with the
-path that produced it.
+**Quicktest and randomtest** — from the library, not from a game — . Quicktest is upstream's own
+`editor/embeddable-autotester.js`, vendored unmodified: it walks every branch of
+a scene by cloning the interpreter and reports real line coverage. Randomtest
+mirrors upstream's `Scene.prototype` overrides, with the line numbers recorded
+against each one, and is seeded so a failing iteration can be replayed.
 
-Both drive the real interpreter, so the story plays itself in the window while
-they run. Neither reports line-level coverage yet; that needs the interpreter's
-own `localCoverage`, and a number that looks like coverage but is not would be
-worse than none.
+Both are **headless** — they build scenes from text and render nothing, which is
+why they live with the shelf and why no game needs to be open. `src/lib/author/
+headless.ts` supplies what upstream's `autotest.js` supplies at the command
+line: `Scene`, `nav` and `stats` as globals, scene text by name, and the
+`verifySceneFile`/`verifyImage`/`warning` commands — then puts every one of them
+back, because the same window keeps playing games afterwards.
 
 **The trace console** (`⌘⇧D`) — every decision the interpreter made, in order:
 which way each `*if` went, which label a `*goto` jumped to, which scene was

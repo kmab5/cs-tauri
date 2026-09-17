@@ -5,6 +5,142 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 18 — v0.3.2, the tests properly, and the fonts
+
+Nine of your sixteen items. The seven left are listed at the bottom with
+reasons, not excuses.
+
+### The tests: upstream's, not mine
+
+You were right that mine did not work, and the reason is that they were the
+wrong shape. Mine drove the **live game** through the public API — restart, read
+the pending choice, answer it, wait for a render. Upstream's do not do anything
+like that.
+
+`quicktest.js` in dfabulich/choicescript is four lines. It shells into
+`autotest.js`, which loads **`editor/embeddable-autotester.js`** — the form the
+ChoiceScript web editor uses. That file is a single function, it takes *scene
+text*, it walks every branch by cloning the interpreter, it renders nothing, and
+it returns real line coverage. It is vendored here **unmodified**, with its
+copyright header, because a test that is not upstream's test does not tell you
+what upstream's test would.
+
+There is no embeddable randomtest, so its `Scene.prototype` overrides are
+mirrored from `randomtest.js` with the upstream line number recorded against
+each one — `page_break` is not a stop (`:374`), `*finish` builds the next scene
+from `nav` and carries on (`:618`), `input_text` sometimes answers blank where
+blanks are allowed (`:602`), `choice` picks and records (`:654`).
+
+Both are headless, which is what let them **move to the library**: nothing needs
+to be playing to walk a scene. Testing is a right-hand panel on the shelf now,
+with a game picker, and the in-game runner is gone.
+
+`headless.ts` provides what `autotest.js` provides at the command line, and
+finding that out took three failures, each of which was mine:
+
+1. **`stats is not defined`** — every scene failed. Upstream sets `nav` and
+   `stats` as *globals*; the autotester's cloned scenes reach for them by name.
+   Passing them as arguments was not enough.
+2. **`this.verifySceneFile is not a function`** — `autotest.js` defines
+   `verifySceneFile`, `verifyImage` and `warning` and the embeddable file does
+   not. One missing stub produced two misleading errors: `startup` aborted before
+   its `*create` ran, so the stats scene then failed for the unrelated-looking
+   reason that `warmth` did not exist.
+3. **A blank page after a test run.** The harness silences `printx`/`println`
+   while the runners work, and the first version never put them back — so a game
+   opened afterwards in the same session rendered nothing. The harness playing a
+   game *after* running the tests is what caught it.
+
+Now verified end to end: the harness opens the panel, runs quicktest on the
+fixture, and it explores both options of both choices across all three scenes
+(`startup,13#1`, `startup,13#2`, `choicescript_stats,4#1`, `#2`), reports line
+coverage and passes; then runs a three-iteration randomtest, which plays
+commands, takes choices and passes.
+
+### The fonts
+
+OpenDyslexic is in — four faces, already woff2 upstream so copied rather than
+converted, with `local()` first so a reader's own install wins. Regular, italic,
+bold *and* bold italic, because the point of that face is weighted baselines and
+a synthesised bold smears them.
+
+Noted on the overused-font finding: your call, not touched, not raised again.
+
+### The browser keyboard
+
+`Ctrl+J` opened downloads, `Ctrl+P` offered to print a story, `Ctrl+F` opened a
+find bar that cannot see past the current screen, `Ctrl+R` reloaded and lost the
+reader's place. All swallowed in a capture-phase handler, along with F3/F5/F11
+and the rest. `Ctrl+F` is redirected to the palette, because that is what
+searching means here. Devtools stay in development and are blocked in a release
+build.
+
+One trap worth recording: my first list blocked `⌘⇧D`, `⌘⇧R` and `⌘W` — the
+trace console, restart, and the window's own Close. Blocking a shortcut the app
+documents is worse than leaving a browser one in place, so the exclusions are
+written down in the file.
+
+### One central theme
+
+The bug was mine and precise: the engine persists `preferredTheme` in **each
+game's** save store and applies it while booting, and my mirror effect wrote
+whatever the engine reported back into the central store. So opening game B
+adopted B's old theme, and the app had as many themes as it had games. The first
+emission after an engine loads is now ignored — the engine is *told* the theme
+on open, and only a change the reader makes afterwards counts.
+
+### Also done
+
+- **Mode badge** in the titlebar. God mode and a trace console change what the
+  app is for; a reader who switched it on last week should not have to open
+  settings to find out.
+- **Debug bar**: drag the top edge to resize (remembered), collapse to a single
+  line with the chevron, vertical padding on the header — it had none, which is
+  why it read as a seam rather than a bar — and **export the trace** as TSV,
+  since a trace that cannot leave the window is no use in a bug report.
+- **Settings contrast**: a chip's hint stayed at `--app-label-dim` when the chip
+  was selected and filled with the accent, putting dim grey on saturated colour.
+
+### Not done, and why
+
+Seven items. All are real and none are hard; they lost to the tests, which were
+the thing you said was broken.
+
+1. **Custom context menus** for the library, the game, settings and the panes.
+2. **God mode: apply/cancel with git-style highlighting and one undo.** This is
+   the one I would do first — it changes god mode from a live poke into an edit
+   you can review, and the yellow/green/none scheme you described is exactly
+   right.
+3. **God mode: every variable used in `choicescript_stats`.** My parser only
+   reads `*stat_chart` rows; variables the stats scene uses in `*if` or `${}`
+   are invisible to it. The fix is parsing the whole scene for references, not
+   just the chart.
+4. **God mode: advanced search** — type filter and regex under a collapsed
+   section.
+5. **Font weight in settings** for the families that have a range. Eight of the
+   bundled families are variable fonts, so the axis is already there.
+6. **Achievement conditions in author mode.** Worth saying what this actually
+   requires: a `*achievement` declaration carries no condition — achievements
+   are granted by `*achieve` elsewhere. So showing "the variable conditions"
+   means finding every `*achieve <id>` in the scenes and walking the indentation
+   upwards to collect the enclosing `*if`s. Static analysis, very doable, but
+   not a fifteen-minute job.
+
+### Verified
+
+- `npm run test:runners` — **92 passed, 0 failed** (library + author: the panel
+  opens, quicktest walks the scenes with coverage and passes, randomtest plays
+  and passes)
+- `npm run test:author` — 33 passed, 0 failed
+- `npm run test:webview` — 83 passed, 0 failed
+- `npm run test:standalone` — 18 passed, 0 failed
+- `npm run test:game` — **78 passed, 0 failed** on Choice of Magics
+- theme-scope, register, stale, version — pass
+
+`npm test` now runs six passes.
+
+---
+
 ## 2026-09-08 · Session 17 — v0.3.1, the tests and the fonts
 
 ### Why the fonts were never working

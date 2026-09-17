@@ -417,6 +417,10 @@ server.listen(PORT, async () => {
 
   /* The bridge has to exist before any application script runs: main.tsx
      checks for it, and the store installs itself off the back of it. */
+  /* Author mode is a setting in a library build, so it is set the way a reader
+     would set it — before the app boots and reads it. */
+  if (authorMode && !standalone) win.localStorage.setItem('cs-author-mode', '1');
+
   const bridge = makeBridge(dataDir, arg, archive);
   win.__TAURI_INTERNALS__ = bridge.internals;
   /* @tauri-apps/api reaches for this directly when unlistening, without a
@@ -507,12 +511,22 @@ server.listen(PORT, async () => {
         .find((b) => /Trace console/.test(b.getAttribute('aria-label') || ''));
       ok('god mode has a control', !!godBtn);
       ok('the trace console has a control', !!bugBtn);
+      ok('the mode is visible without opening settings',
+        /Author/.test(d.querySelector('.app-mode')?.textContent || ''),
+        d.querySelector('.app-mode')?.textContent);
       ok('the interpreter is instrumented', typeof win.Scene === 'function');
 
       if (bugBtn) {
         bugBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
         await new Promise((r) => setTimeout(r, 400));
         ok('the console opens', !!d.querySelector('section[aria-label="Debug console"]'));
+        ok('it can be resized', !!d.querySelector('.console-grip'));
+        ok('it can be collapsed',
+          !!d.querySelector('.console-head button[aria-expanded]'));
+        ok('the trace can be exported',
+          !!Array.prototype.slice
+            .call(d.querySelectorAll('.console-head button'))
+            .find((b) => /Export/.test(b.getAttribute('title') || '')));
         const lines = d.querySelectorAll('.console-line');
         ok('it traced the interpreter loading the game', lines.length > 0,
           lines.length + ' lines');
@@ -530,59 +544,6 @@ server.listen(PORT, async () => {
         ok('choices are traced with their text', /option/.test(traced),
           traced.slice(-120));
         ok('and variable writes with their value', /\*create warmth/.test(traced));
-      }
-
-      console.log('\nquicktest and randomtest');
-      const testBtn = Array.prototype.slice
-        .call(d.querySelectorAll('.app-titlebar button'))
-        .find((b) => /Test this game/.test(b.getAttribute('aria-label') || ''));
-      ok('the test runner has a control', !!testBtn);
-      if (testBtn) {
-        testBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-        await new Promise((r) => setTimeout(r, 400));
-        ok('it opens with both tools', /Quicktest/.test(d.body.textContent) &&
-          /Randomtest/.test(d.body.textContent));
-
-        /* Two iterations is enough to prove the driver plays the game to an
-           ending, answers choices and reports — which is the part that cannot
-           be reasoned about, only run. */
-        const iterations = d.querySelector('input[type=number]');
-        if (iterations) {
-          const setValue = Object.getOwnPropertyDescriptor(
-            win.HTMLInputElement.prototype,
-            'value',
-          ).set;
-          setValue.call(iterations, '2');
-          iterations.dispatchEvent(new win.Event('input', { bubbles: true }));
-        }
-        const rnd = Array.prototype.slice
-          .call(d.querySelectorAll('button'))
-          .find((b) => /^Randomtest/.test(b.textContent.trim()));
-        ok('randomtest can be started', !!rnd);
-        if (rnd) {
-          rnd.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-          /* The driver plays a real game through the real interpreter, so this
-             waits on the story rather than on a tick. */
-          let waited = 0;
-          while (waited < 20000 && !/Finished/.test(d.body.textContent)) {
-            await new Promise((r) => setTimeout(r, 250));
-            waited += 250;
-          }
-          ok('it finishes', /Finished/.test(d.body.textContent), `after ${waited}ms`);
-          ok('it reports screens played', /Screens/.test(d.body.textContent));
-          ok('it reports option coverage', /Options taken/.test(d.body.textContent));
-          ok('the fixture game passes it',
-            /No failures/.test(d.body.textContent),
-            (d.querySelector('.test-report')?.textContent || '').slice(0, 160));
-          ok('an ending was reached',
-            !/Endings reached\s*0\b/.test(d.querySelector('.test-report')?.textContent || ''),
-            (d.querySelector('.test-report')?.textContent || '').slice(0, 120));
-        }
-        const close = Array.prototype.slice
-          .call(d.querySelectorAll('button'))
-          .find((b) => /^Close/.test(b.textContent.trim()));
-        if (close) close.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-        await new Promise((r) => setTimeout(r, 400));
       }
 
       if (godBtn) {
@@ -699,6 +660,70 @@ server.listen(PORT, async () => {
   ok('it appears on the shelf', /./.test(d.querySelector('.lib-card-title')?.textContent || ''),
     d.querySelector('.lib-card-title')?.textContent);
   ok('the shelf card is the play target', !!d.querySelector('button.lib-card'));
+
+  if (authorMode) {
+    console.log('\nthe upstream runners, headless, from the library');
+    /* Run before any game is opened: the runners are headless and need
+       nothing playing, which is the whole reason they moved here. */
+    const testBtn = Array.prototype.slice
+      .call(d.querySelectorAll('button'))
+      .find((b) => /Testing/.test(b.textContent));
+    if (!testBtn) {
+      skip('the testing panel', 'the shelf is not on screen in this pass');
+    } else {
+      testBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 400));
+      ok('the testing panel opens on the library',
+        !!d.querySelector('aside[aria-label=Testing]'));
+
+      const quick = Array.prototype.slice
+        .call(d.querySelectorAll('aside[aria-label=Testing] button'))
+        .find((b) => /^Quicktest/.test(b.textContent.trim()));
+      ok('quicktest can be started', !!quick);
+      if (quick) {
+        quick.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+        let waited = 0;
+        while (waited < 30000 && !/Finished/.test(d.querySelector('aside[aria-label=Testing]')?.textContent || '')) {
+          await new Promise((r) => setTimeout(r, 250));
+          waited += 250;
+        }
+        const panel = d.querySelector('aside[aria-label=Testing]')?.textContent || '';
+        ok("upstream's autotester runs to completion", /Finished/.test(panel), `after ${waited}ms`);
+        ok('it walked the scenes', /Scenes walked/.test(panel));
+        ok('it reports line coverage', /Lines covered/.test(panel));
+        const report = d.querySelector('aside[aria-label=Testing] .test-report')?.textContent || '';
+        ok('the fixture game passes quicktest', /No failures/.test(report),
+          report.replace(/\s+/g, ' ').slice(0, 220));
+      }
+
+      const rnd = Array.prototype.slice
+        .call(d.querySelectorAll('aside[aria-label=Testing] button'))
+        .find((b) => /^Randomtest/.test(b.textContent.trim()));
+      if (rnd) {
+        const iterations = d.querySelector('aside[aria-label=Testing] input[type=number]');
+        if (iterations) {
+          const setValue = Object.getOwnPropertyDescriptor(
+            win.HTMLInputElement.prototype, 'value').set;
+          setValue.call(iterations, '3');
+          iterations.dispatchEvent(new win.Event('input', { bubbles: true }));
+        }
+        rnd.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+        let waited = 0;
+        while (waited < 30000 &&
+          !/Playthroughs/.test(d.querySelector('aside[aria-label=Testing] .test-report')?.textContent || '')) {
+          await new Promise((r) => setTimeout(r, 250));
+          waited += 250;
+        }
+        const rep = d.querySelector('aside[aria-label=Testing] .test-report')?.textContent || '';
+        ok('randomtest runs to completion', /Playthroughs/.test(rep), `after ${waited}ms`);
+        ok('it played commands and took choices',
+          !/Commands\s*0\b/.test(rep) && !/Choices\s*0\b/.test(rep),
+          rep.replace(/\s+/g, ' ').slice(0, 180));
+        ok('the fixture game passes randomtest', /No failures/.test(rep),
+          rep.replace(/\s+/g, ' ').slice(0, 220));
+      }
+    }
+  }
 
   console.log('\nit plays');
   const play = d.querySelector('button.lib-card');

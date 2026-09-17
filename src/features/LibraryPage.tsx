@@ -7,7 +7,7 @@
  * a game out from under a live interpreter by accident.
  */
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Clock, Hammer, Plus, Share2, Trash2 } from 'lucide-react';
+import { Clock, FlaskConical, Hammer, Plus, Share2, Trash2 } from 'lucide-react';
 
 import {
   deleteGame,
@@ -33,6 +33,9 @@ import { DropOverlay } from './DropOverlay';
  * and the chunk is never emitted, which `npm run test:webview` verifies by
  * searching `dist/` for those strings.
  */
+import { isAuthorMode } from '@/lib/author/mode';
+import { TestingPanel } from './author/TestingPanel';
+
 const BuildAppDialog = import.meta.env.DEV
   ? lazy(() => import('./BuildAppDialog').then((m) => ({ default: m.BuildAppDialog })))
   : null;
@@ -123,6 +126,10 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
   /* Development instances only. `isDev()` is a compile-time constant, so in a
      production bundle this state, the button and the dialog are all removed. */
   const [building, setBuilding] = useState<StoredGame | null>(null);
+  /* Author mode only, and only here: the runners are headless, so testing
+     belongs with the shelf rather than inside a story. */
+  const [testing, setTesting] = useState(false);
+  const author = isAuthorMode();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(() => {
@@ -213,6 +220,16 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
           />
         )}
 
+        {author && !!games?.length && (
+          <button
+            className="app-btn"
+            aria-pressed={testing}
+            onClick={() => setTesting((v) => !v)}
+            title="Quicktest and randomtest"
+          >
+            <FlaskConical className="size-3.5" aria-hidden /> Testing
+          </button>
+        )}
         <button className="app-btn app-btn-primary" onClick={() => fileInput.current?.click()}>
           <Plus className="size-3.5" aria-hidden /> Add game
         </button>
@@ -342,6 +359,10 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
         ))}
         </div>
       </div>
+
+      {author && testing && !!games?.length && (
+        <TestingPanel games={games} onClose={() => setTesting(false)} />
+      )}
 
       {BuildAppDialog && building && (
         <Suspense fallback={null}>

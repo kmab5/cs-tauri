@@ -9,6 +9,7 @@ import { installPolyfills } from './polyfills';
 import { installLinkHandler } from './links';
 import { installFileStore } from './store';
 import { applyTheme } from '../theme';
+import { installBrowserKeyBlocker } from './nobrowser';
 
 export type Platform = 'macos' | 'windows' | 'linux';
 
@@ -44,6 +45,11 @@ if (hasTauri()) {
   installPolyfills();
   installLinkHandler();
   installFileStore();
+  /* The webview's own keyboard, which is a browser's, minus everything that
+     makes no sense in an app. */
+  installBrowserKeyBlocker(() =>
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true })),
+  );
   /* Before React paints: the library page has no engine to theme it, so the
      stored choice is applied to <body> here. */
   applyTheme();
