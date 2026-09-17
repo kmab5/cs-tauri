@@ -28,4 +28,24 @@ if (!after.includes(`v${version}`)) {
   process.exit(1);
 }
 
-console.log(`\ndocs/index.html is current for v${version}.\n`);
+/*
+ * A small guard against the page drifting back into the generic. These are the
+ * specific tells the frontend-design skill calibrates against, and the ones an
+ * earlier version of this page had: a tracked-out uppercase eyebrow label, meta
+ * strings joined with middle dots, and identical rounded cards standing in for
+ * structure. If one comes back, it should come back on purpose.
+ */
+const tells = [
+  ['text-transform: uppercase', 'an uppercase eyebrow label'],
+  [' · ', 'a middle-dot meta string'],
+  ['class="card"', 'the identical-card layout'],
+];
+const found = tells.filter(([needle]) => after.includes(needle));
+if (found.length) {
+  console.error('\nthe landing page has drifted back to defaults:\n');
+  for (const [, why] of found) console.error(`  fail  ${why}`);
+  console.error('');
+  process.exit(1);
+}
+
+console.log(`\ndocs/index.html is current for v${version}, and free of the usual tells.\n`);

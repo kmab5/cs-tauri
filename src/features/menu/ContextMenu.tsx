@@ -1,22 +1,24 @@
 /**
  * The app's own context menus.
  *
- * WebView2 and WKWebView bring a browser's right-click menu — reload, save as,
- * print, view source, inspect — which is the same category of nonsense as the
- * browser keyboard shortcuts, and more visible. It is suppressed everywhere and
- * replaced with menus that belong to whatever was clicked.
+ * Rewritten after the first version did nothing in the real app while passing
+ * in the harness. That version hung a React `onContextMenu` on each region and
+ * relied on it running before a document-level fallback — synthetic event
+ * ordering, `stopPropagation`, and a closure per render, three things that can
+ * each break it silently and two of which a jsdom test will not notice.
  *
- * One exception, deliberately: **editable fields keep an edit menu.** Killing
- * the native menu takes cut, copy and paste with it, and a text field without
- * those is broken in a way people notice immediately. Those items go through
- * the clipboard API rather than `execCommand`.
+ * So there is no per-region handler now. One capture-phase listener on the
+ * document handles every right-click, finds the nearest ancestor carrying a
+ * `data-menu` name, and looks that name up in a registry components write to
+ * with `useMenuRegion`. Nothing depends on event order, nothing captures stale
+ * state, and a region that has not registered still gets a sensible menu rather
+ * than the webview's.
  *
- * Regions register their own items through `useContextMenu`. An item can be
- * disabled or omitted; omitted is better, for the same reason a standalone
- * build has no "Back to Library" — a menu full of greyed-out entries describes
- * an app that cannot do what it is showing you.
+ * Editable fields keep cut, copy, paste and select all, because suppressing the
+ * native menu takes those with it and a text field without them is broken in a
+ * way people notice immediately.
  */
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 export interface MenuItem {
   label: string;
@@ -27,7 +29,6 @@ export interface MenuItem {
   run: () => void;
 }
 
-/** A separator between groups. */
 export const DIVIDER = null;
 export type MenuEntry = MenuItem | null;
 
@@ -37,28 +38,53 @@ interface MenuState {
   entries: MenuEntry[];
 }
 
-const Ctx = createContext<(e: React.MouseEvent | MouseEvent, entries: MenuEntry[]) => void>(
-  () => {},
-);
+/**
+ * Region name to the items it offers, as a live registry.
+ *
+ * Module scope rather than context state on purpose: the listener reads it at
+ * the moment of the click, so it always sees the current builders, and
+ * registering one does not re-render anything.
+ */
+const regions = new Map<string, () => MenuEntry[]>();
 
-/** Hands back an onContextMenu handler for a region. */
-export function useContextMenu(entries: () => MenuEntry[]) {
-  const open = useContext(Ctx);
-  return useCallback(
-    (event: React.MouseEvent) => {
-      const items = entries().filter(Boolean).length ? entries() : [];
-      if (!items.length) return;
-      event.preventDefault();
-      event.stopPropagation();
-      open(event, items);
-    },
-    [entries, open],
-  );
+/** Fallback, so a right-click anywhere does something rather than nothing. */
+let appFallback: () => MenuEntry[] = () => [];
+
+export function setAppMenu(build: () => MenuEntry[]) {
+  appFallback = build;
+}
+
+/**
+ * Registers a region's menu and hands back the prop that names it.
+ *
+ * `{...useMenuRegion('shelf', build)}` puts `data-menu="shelf"` on the element;
+ * the document listener does the rest.
+ */
+export function useMenuRegion(name: string, build: () => MenuEntry[]) {
+  const latest = useRef(build);
+  latest.current = build;
+
+  useEffect(() => {
+    regions.set(name, () => latest.current());
+    return () => {
+      regions.delete(name);
+    };
+  }, [name]);
+
+  return { 'data-menu': name } as const;
+}
+
+const OpenCtx = createContext<(x: number, y: number, entries: MenuEntry[]) => void>(() => {});
+
+/** For a menu whose items depend on which item was clicked. */
+export function useContextMenuOpener() {
+  return useContext(OpenCtx);
 }
 
 function editEntries(target: HTMLInputElement | HTMLTextAreaElement): MenuEntry[] {
   const selection = target.value.slice(target.selectionStart ?? 0, target.selectionEnd ?? 0);
   const write = (text: string) => void navigator.clipboard?.writeText(text).catch(() => {});
+  const fire = () => target.dispatchEvent(new Event('input', { bubbles: true }));
   return [
     {
       label: 'Cut',
@@ -66,9 +92,8 @@ function editEntries(target: HTMLInputElement | HTMLTextAreaElement): MenuEntry[
       disabled: !selection || target.readOnly,
       run: () => {
         write(selection);
-        const start = target.selectionStart ?? 0;
-        target.setRangeText('', start, target.selectionEnd ?? 0, 'end');
-        target.dispatchEvent(new Event('input', { bubbles: true }));
+        target.setRangeText('', target.selectionStart ?? 0, target.selectionEnd ?? 0, 'end');
+        fire();
       },
     },
     { label: 'Copy', hint: '⌘C', disabled: !selection, run: () => write(selection) },
@@ -76,74 +101,88 @@ function editEntries(target: HTMLInputElement | HTMLTextAreaElement): MenuEntry[
       label: 'Paste',
       hint: '⌘V',
       disabled: target.readOnly,
-      run: () => {
+      run: () =>
         void navigator.clipboard?.readText().then((text) => {
           target.setRangeText(text, target.selectionStart ?? 0, target.selectionEnd ?? 0, 'end');
-          target.dispatchEvent(new Event('input', { bubbles: true }));
-        });
-      },
+          fire();
+        }),
     },
     DIVIDER,
     { label: 'Select all', hint: '⌘A', run: () => target.select() },
   ];
 }
 
-/** For a menu whose items depend on what was clicked, not just where. */
-export function useContextMenuOpener() {
-  return useContext(Ctx);
-}
+const live = (entries: MenuEntry[]) => entries.filter((e) => e !== null).length > 0;
 
 export function ContextMenuProvider({ children }: { children: React.ReactNode }) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [active, setActive] = useState(0);
   const box = useRef<HTMLDivElement>(null);
 
-  const open = useCallback((event: React.MouseEvent | MouseEvent, entries: MenuEntry[]) => {
-    setMenu({ x: event.clientX, y: event.clientY, entries });
+  const open = (x: number, y: number, entries: MenuEntry[]) => {
+    setMenu({ x, y, entries });
     setActive(entries.findIndex((e) => e && !e.disabled));
-  }, []);
+  };
 
-  /*
-   * The catch-all. Anything that did not handle its own right-click gets either
-   * the edit menu, if it is a field, or nothing — and nothing still means the
-   * browser's menu is suppressed.
-   */
   useEffect(() => {
     const onContext = (event: MouseEvent) => {
-      if (event.defaultPrevented) return;
+      /* Always: the webview's own menu is never the right answer here. */
       event.preventDefault();
+
       const target = event.target as HTMLElement | null;
+
+      /* A field's own menu comes first — losing paste is worse than any
+         region menu is worth. */
       const field = target?.closest('input, textarea') as
         | HTMLInputElement
         | HTMLTextAreaElement
         | null;
-      if (field && !/^(checkbox|radio|range|file|button|submit)$/.test((field as HTMLInputElement).type ?? '')) {
-        open(event, editEntries(field));
+      if (field && !/^(checkbox|radio|range|file|button|submit|search)$/.test(field.type ?? '')) {
+        open(event.clientX, event.clientY, editEntries(field));
         return;
       }
-      /* A text selection anywhere else can at least be copied. */
-      const selected = window.getSelection()?.toString();
-      if (selected) {
-        open(event, [
-          {
-            label: 'Copy',
-            hint: '⌘C',
-            run: () => void navigator.clipboard?.writeText(selected).catch(() => {}),
-          },
-        ]);
-      }
-    };
-    document.addEventListener('contextmenu', onContext);
-    return () => document.removeEventListener('contextmenu', onContext);
-  }, [open]);
 
-  /* Dismissal: anywhere else, Escape, scroll, or the window losing focus. */
+      /* Then the nearest registered region, walking outwards. */
+      let node: HTMLElement | null = target?.closest('[data-menu]') ?? null;
+      while (node) {
+        const build = regions.get(node.dataset.menu ?? '');
+        const entries = build?.() ?? [];
+        if (live(entries)) {
+          open(event.clientX, event.clientY, entries);
+          return;
+        }
+        node = node.parentElement?.closest('[data-menu]') ?? null;
+      }
+
+      /* Then a selection, then the app's own menu. Never nothing. */
+      const selected = window.getSelection()?.toString().trim();
+      const entries: MenuEntry[] = [];
+      if (selected) {
+        entries.push({
+          label: 'Copy',
+          hint: '⌘C',
+          run: () => void navigator.clipboard?.writeText(selected).catch(() => {}),
+        });
+        entries.push(DIVIDER);
+      }
+      entries.push(...appFallback());
+      if (live(entries)) open(event.clientX, event.clientY, entries);
+    };
+
+    /* Capture, so nothing downstream can swallow it first. */
+    document.addEventListener('contextmenu', onContext, true);
+    return () => document.removeEventListener('contextmenu', onContext, true);
+  }, []);
+
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
     const onKey = (e: KeyboardEvent) => {
       const items = menu.entries;
-      if (e.key === 'Escape') return close();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        return close();
+      }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         const step = e.key === 'ArrowDown' ? 1 : -1;
@@ -163,31 +202,31 @@ export function ContextMenuProvider({ children }: { children: React.ReactNode })
         }
       }
     };
-    window.addEventListener('pointerdown', close);
+    /* pointerdown would fire for the same right-click that opened it in some
+       webviews, so dismissal waits for the next click instead. */
+    window.addEventListener('click', close);
     window.addEventListener('blur', close);
     window.addEventListener('wheel', close, { passive: true });
     document.addEventListener('keydown', onKey, true);
     return () => {
-      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('click', close);
       window.removeEventListener('blur', close);
       window.removeEventListener('wheel', close);
       document.removeEventListener('keydown', onKey, true);
     };
   }, [menu, active]);
 
-  /* Flip rather than overflow: a menu opened near an edge opens inwards. */
+  /* Opened near an edge, it opens inwards rather than overflowing. */
   useEffect(() => {
     const el = box.current;
     if (!el || !menu) return;
     const rect = el.getBoundingClientRect();
-    const x = Math.min(menu.x, window.innerWidth - rect.width - 8);
-    const y = Math.min(menu.y, window.innerHeight - rect.height - 8);
-    el.style.left = `${Math.max(8, x)}px`;
-    el.style.top = `${Math.max(8, y)}px`;
+    el.style.left = `${Math.max(8, Math.min(menu.x, window.innerWidth - rect.width - 8))}px`;
+    el.style.top = `${Math.max(8, Math.min(menu.y, window.innerHeight - rect.height - 8))}px`;
   }, [menu]);
 
   return (
-    <Ctx.Provider value={open}>
+    <OpenCtx.Provider value={open}>
       {children}
       {menu && (
         <div
@@ -221,6 +260,6 @@ export function ContextMenuProvider({ children }: { children: React.ReactNode })
           )}
         </div>
       )}
-    </Ctx.Provider>
+    </OpenCtx.Provider>
   );
 }

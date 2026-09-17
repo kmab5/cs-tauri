@@ -756,6 +756,70 @@ server.listen(PORT, async () => {
     }
   }
 
+  console.log('\nthe app has its own context menus');
+  /* The webview's own menu is suppressed everywhere; a right-click either gets
+     one of ours or nothing, never the browser's. */
+  const rightClick = async (target) => {
+    const event = new win.MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 40,
+      clientY: 40,
+    });
+    target.dispatchEvent(event);
+    await new Promise((r) => setTimeout(r, 250));
+    return event;
+  };
+  const dismiss = async () => {
+    win.document.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await new Promise((r) => setTimeout(r, 200));
+  };
+
+  /* Three targets, because the first version of this worked on one of them in
+     jsdom and on none of them in the real webview. Each is a different route
+     through the listener: a registered region, a deeply nested child of one,
+     and a bare element with no region at all. */
+  const shelf = d.querySelector('.lib-shell');
+  if (shelf) {
+    const event = await rightClick(shelf);
+    ok('the native menu is prevented', event.defaultPrevented);
+    ok('the shelf gets its own menu', !!d.querySelector('.ctx[role=menu]'));
+    ok('with items', d.querySelectorAll('.ctx-item').length > 0,
+      d.querySelectorAll('.ctx-item').length + ' items');
+    await dismiss();
+    ok('escape dismisses it', !d.querySelector('.ctx[role=menu]'));
+
+    /* A nested child: the listener walks outwards to the nearest region. */
+    const nested = shelf.querySelector('.lib-count') || shelf.querySelector('h1');
+    if (nested) {
+      await rightClick(nested);
+      ok('a nested element resolves to its region', !!d.querySelector('.ctx[role=menu]'));
+      await dismiss();
+    }
+
+    /* Nothing registered: the app-wide fallback, never the browser's menu. */
+    const bare = d.querySelector('.app-titlebar') || d.body;
+    const bareEvent = await rightClick(bare);
+    ok('an unregistered element still gets a menu',
+      bareEvent.defaultPrevented && !!d.querySelector('.ctx[role=menu]'));
+    await dismiss();
+
+    /* A field keeps cut/copy/paste, which suppressing the native menu removes. */
+    const field = d.querySelector('input.lib-search') || d.querySelector('input[type=file]');
+    const textField = d.querySelector('input:not([type=file]):not([type=checkbox])');
+    if (!textField) {
+      skip('a text field keeps its edit menu', 'no text field on the shelf in this pass');
+    } else {
+      await rightClick(textField);
+      const labels = Array.prototype.slice
+        .call(d.querySelectorAll('.ctx-item span'))
+        .map((e) => e.textContent);
+      ok('a text field keeps its edit menu', labels.includes('Paste'), labels.join(', '));
+      await dismiss();
+    }
+    void field;
+  }
+
   console.log('\nit plays');
   const play = d.querySelector('button.lib-card');
   if (play) play.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
@@ -991,21 +1055,19 @@ server.listen(PORT, async () => {
     !save || win.getComputedStyle(save).borderLeftWidth !== '3px',
     save ? win.getComputedStyle(save).borderLeftWidth : 'no saves yet');
 
-  console.log('\nthe app has its own context menus');
-  /* The webview's own menu is suppressed everywhere; a right-click either gets
-     one of ours or nothing, never the browser's. */
-  const shelf = d.querySelector('.lib-shell') || d.querySelector('.app-reading');
-  if (shelf) {
-    const event = new win.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 });
-    shelf.dispatchEvent(event);
+  console.log('\nthe story has a menu of its own');
+  {
+    const story = d.querySelector('.app-reading');
+    const event = new win.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 60, clientY: 60 });
+    story?.dispatchEvent(event);
     await new Promise((r) => setTimeout(r, 250));
-    ok('the native menu is prevented', event.defaultPrevented);
-    ok('ours opens instead', !!d.querySelector('.ctx[role=menu]'));
-    const items = d.querySelectorAll('.ctx-item');
-    ok('with items for where it was clicked', items.length > 0, items.length + ' items');
+    const labels = Array.prototype.slice
+      .call(d.querySelectorAll('.ctx-item span'))
+      .map((e) => e.textContent);
+    ok('right-clicking the story offers the game commands',
+      labels.some((l) => /Stats screen/.test(l)), labels.join(', '));
     win.document.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await new Promise((r) => setTimeout(r, 250));
-    ok('escape dismisses it', !d.querySelector('.ctx[role=menu]'));
+    await new Promise((r) => setTimeout(r, 200));
   }
 
   console.log('\nthe reading faces are packaged');

@@ -36,8 +36,8 @@ import { DropOverlay } from './DropOverlay';
 import { isAuthorMode } from '@/lib/author/mode';
 import {
   DIVIDER,
-  useContextMenu,
   useContextMenuOpener,
+  useMenuRegion,
   type MenuEntry,
 } from '@/features/menu/ContextMenu';
 import { TestingPanel } from './author/TestingPanel';
@@ -169,7 +169,7 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
   const openMenu = useContextMenuOpener();
 
   const cardMenu = (event: React.MouseEvent, game: StoredGame) =>
-    openMenu(event, [
+    openMenu(event.clientX, event.clientY, [
       { label: 'Play', run: () => onPlay(game) },
       DIVIDER,
       {
@@ -200,16 +200,14 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
   const openPalette = () =>
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
 
-  const shelfMenu = useContextMenu(
-    (): MenuEntry[] => [
-      { label: 'Add game…', hint: '⌘O', run: () => fileInput.current?.click() },
-      ...(author && games?.length
-        ? [DIVIDER, { label: testing ? 'Hide testing' : 'Testing…', run: () => setTesting((v) => !v) }]
-        : []),
-      DIVIDER,
-      { label: 'Command palette', hint: '⌘K', run: () => openPalette() },
-    ],
-  );
+  const shelfRegion = useMenuRegion('shelf', (): MenuEntry[] => [
+    { label: 'Add game…', hint: '⌘O', run: () => fileInput.current?.click() },
+    ...(author && games?.length
+      ? [DIVIDER, { label: testing ? 'Hide testing' : 'Testing…', run: () => setTesting((v) => !v) }]
+      : []),
+    DIVIDER,
+    { label: 'Command palette', hint: '⌘K', run: () => openPalette() },
+  ]);
 
   /* Most recent first, and only games that have actually been opened. */
   const recent = (games ?? [])
@@ -218,7 +216,7 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
     .slice(0, 8);
 
   return (
-    <div className="lib-shell" onContextMenu={shelfMenu}>
+    <div className="lib-shell" {...shelfRegion}>
       {/* Dropping is only offered here. Mid-game there is nothing sensible to
           do with an archive except queue it for a reload. */}
       <DropOverlay onImported={refresh} onBusy={setBusy} onError={setError} />
@@ -349,11 +347,10 @@ export function LibraryPage({ onPlay }: { onPlay: (game: StoredGame) => void }) 
             className="lib-card"
             aria-label={`Play ${game.title}${game.author ? ` by ${game.author}` : ''}`}
             onClick={() => onPlay(game)}
+            /* The card's items depend on which card, so it opens the menu
+               directly rather than registering a region per card. */
             onContextMenu={(event) => {
-              /* The card's own menu: everything the hover actions do, named,
-                 plus the two-step delete collapsed into one deliberate item. */
               event.preventDefault();
-              event.stopPropagation();
               cardMenu(event, game);
             }}
           >

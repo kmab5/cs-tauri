@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DialogPanel } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { SettingsForm } from './SettingsForm';
 
 interface ScreenProps {
   cs: ChoiceScriptApi;
@@ -120,106 +121,10 @@ function Saves({ cs }: { cs: ChoiceScriptApi }) {
   );
 }
 
-function Chips({
-  legend,
-  items,
-  current,
-  onPick,
-}: {
-  legend: string;
-  items: { id: string; label: string; hint?: string }[];
-  current: string;
-  onPick: (id: string) => void;
-}) {
-  return (
-    <fieldset className="mb-5 border-0 border-t border-rule p-0 pt-4 first:border-t-0 first:pt-0">
-      <legend className="font-ui text-sm uppercase tracking-wider text-ink-muted">
-        {legend}
-      </legend>
-      <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2">
-        {items.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => onPick(item.id)}
-            className={cn(
-              'flex min-h-touch flex-col items-start rounded-cs border border-rule px-3 py-2 text-left transition-colors hover:border-accent',
-              current === item.id && 'border-accent bg-accent-wash',
-            )}
-          >
-            <span className="font-ui text-[0.9375rem]">{item.label}</span>
-            {item.hint && <span className="font-ui text-sm text-ink-muted">{item.hint}</span>}
-          </button>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
-
 function Settings({ cs, state }: { cs: ChoiceScriptApi; state: ChoiceScriptState }) {
-  const { theme } = state;
-  return (
-    <div>
-      <Chips legend="Theme" items={cs.themes()} current={theme.name} onPick={cs.setTheme} />
-      <Chips
-        legend="Brightness"
-        items={[
-          { id: 'sepia', label: 'Default' },
-          { id: 'black', label: 'Dark' },
-          { id: 'white', label: 'Light' },
-        ]}
-        current={theme.brightness}
-        onPick={cs.setBrightness}
-      />
-      <Chips
-        legend="Typeface"
-        items={cs.typefaces()}
-        current={theme.typeface}
-        onPick={cs.setTypeface}
-      />
-      <Chips legend="Line width" items={cs.widths()} current={theme.width} onPick={cs.setWidth} />
-
-      <fieldset className="mb-5 border-0 border-t border-rule p-0 pt-4">
-        <legend className="font-ui text-sm uppercase tracking-wider text-ink-muted">
-          Text size
-        </legend>
-        <div className="mt-3 flex items-center gap-3">
-          <Button size="sm" aria-label="Smaller text" onClick={() => cs.setZoom(Math.max(0.75, theme.zoom - 0.125))}>
-            A−
-          </Button>
-          <span className="min-w-[4ch] text-center font-ui tabular-nums text-ink-muted">
-            {Math.round(theme.zoom * 100)}%
-          </span>
-          <Button size="sm" aria-label="Larger text" onClick={() => cs.setZoom(Math.min(2, theme.zoom + 0.125))}>
-            A+
-          </Button>
-        </div>
-      </fieldset>
-
-      <fieldset className="mb-5 border-0 border-t border-rule p-0 pt-4">
-        <legend className="font-ui text-sm uppercase tracking-wider text-ink-muted">Motion</legend>
-        <div className="mt-3 flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="cs-anim"
-            checked={theme.animate}
-            onChange={(e) => cs.setAnimation(e.target.checked)}
-          />
-          <label htmlFor="cs-anim" className="font-ui text-[0.9375rem]">
-            Fade between screens
-          </label>
-        </div>
-      </fieldset>
-
-      <fieldset className="border-0 border-t border-rule p-0 pt-4">
-        <legend className="font-ui text-sm uppercase tracking-wider text-ink-muted">Game</legend>
-        <div className="mt-3">
-          <Button variant="danger" onClick={() => cs.restart()}>
-            Restart from the beginning
-          </Button>
-        </div>
-      </fieldset>
-    </div>
-  );
+  /* The same form the library shows, plus the engine's own rows. There is one
+     settings surface; this is one of its two hosts. */
+  return <SettingsForm cs={cs} state={state} />;
 }
 
 function Achievements({ state }: { state: ChoiceScriptState }) {

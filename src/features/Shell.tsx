@@ -9,7 +9,7 @@
  * share one handler registry (lib/desktop/menu.ts) rather than three code paths
  * that drift apart.
  */
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
   BarChart3,
@@ -38,10 +38,9 @@ import { DebugConsole } from './author/DebugConsole';
 import { isAuthorMode } from '@/lib/author/mode';
 import { installInstrumentation, removeInstrumentation, trace } from '@/lib/author/instrument';
 import { Palette, keyHint, type Command } from './Palette';
-import { DIVIDER, useContextMenu, type MenuEntry } from './menu/ContextMenu';
+import { DIVIDER, setAppMenu, useMenuRegion, type MenuEntry } from './menu/ContextMenu';
 import { readScroll, saveScroll, useReadingKeys } from './useReadingKeys';
 import { useAutosave } from './useAutosave';
-import { applyTheme, setFace, setTheme, setZoom } from '@/lib/theme';
 
 /** Below this the side panel would squeeze the reading measure, so it is hidden. */
 const WIDE = '(min-width: 1100px)';
@@ -104,33 +103,43 @@ function ReadingKeys({ cs, gameId }: { cs: ChoiceScriptApi; gameId: string }) {
   }, [state.history, state.pending]);
 
   /*
-   * The engine's settings dialog is the other way these change, so they are
-   * mirrored back into the central store.
-   *
-   * The first emission is skipped, and that is the whole fix for the theme
-   * jumping about between games. The engine persists its own `preferredTheme`
-   * in each game's save store and applies it as it boots — so opening game B
-   * briefly reported B's old theme, this effect wrote that into the central
-   * store, and the app had as many themes as it had games. There is one theme;
-   * the engine is told it on open, and only a change the reader makes *after*
-   * that counts.
+   * Nothing mirrors the engine's reported theme back into the central store any
+   * more, and that is the fix rather than an omission. The engine persists its
+   * own `preferredTheme` per game and applies it while booting, so any mirror
+   * adopted whichever game was opened last — themes wandered between the
+   * library and a story, and between stories. The central store is written by
+   * the settings form alone, and the engine is told on open.
    */
-  const synced = useRef(false);
+
+  useAutosave(cs, state.history, state.canSave);
+
+  /* The picked option's *text* is only knowable here: the interpreter sees an
+     index, the front end has the label the reader actually read. */
   useEffect(() => {
-    synced.current = false;
-  }, [cs]);
-  useEffect(() => {
-    if (!synced.current) {
-      synced.current = true;
-      return;
-    }
-    setTheme(state.theme.name);
-    setZoom(state.theme.zoom);
-    setFace(state.theme.typeface);
-    /* The weight is ours, not the engine's, and it is per face — so a face
-       changed from inside a game re-applies that face's stored weight. */
-    applyTheme();
-  }, [state.theme.name, state.theme.zoom, state.theme.typeface]);
+    const pending = state.pending;
+    if (!pending || pending.kind !== 'choice') return;
+    trace(
+      'choice',
+      `${pending.options.length} option${pending.options.length === 1 ? '' : 's'} offered`,
+      pending.options
+        /* `name` is HTML: the engine has already expanded bbcode, so the tags
+           are stripped for a one-line trace rather than rendered into it. */
+        .map(
+          (o, i) =>
+            `${i + 1}. ${o.name.replace(/<[^>]*>/g, '')}${o.unselectable ? ' (locked)' : ''}`,
+        )
+        .join(' · '),
+    );
+  }, [state.history, state.pending]);
+
+  /*
+   * Nothing mirrors the engine's reported theme back into the central store,
+   * and that is the fix rather than an omission. The engine persists its own
+   * `preferredTheme` in each game's save store and applies it while booting, so
+   * a mirror adopted whichever game was opened last — which is why the theme
+   * wandered between the library and a story, and between stories. The central
+   * store is written by the settings form alone; the engine is told on open.
+   */
 
   /* Restored once, at the start of the session. Player scrolls each new screen
      back to the top, so anything later would be fighting it. */
@@ -430,7 +439,7 @@ export function Shell({
   /* The story's menu: what a reader right-clicking the page wants, which is
      what the titlebar offers plus a way out of focus mode. Copy is handled by
      the provider when there is a selection. */
-  const storyMenu = useContextMenu((): MenuEntry[] =>
+  const storyRegion = useMenuRegion('story', (): MenuEntry[] =>
     game && cs
       ? [
           { label: 'Stats screen', hint: keyHint('mod+shift+s'), run: () => cs.openStats() },
@@ -457,7 +466,7 @@ export function Shell({
 
   /* The panes: sizing and visibility, which is what a right-click on a divider
      or a panel header is asking about. */
-  const paneMenu = useContextMenu((): MenuEntry[] => [
+  const paneRegion = useMenuRegion('panes', (): MenuEntry[] => [
     { label: sidebar ? 'Hide sidebar' : 'Show sidebar', hint: keyHint('mod+\\'), run: () => setSidebar((v) => !v) },
     { label: 'Reset sidebar width', run: () => setWidth(260) },
     ...(wide
@@ -475,6 +484,14 @@ export function Shell({
       : []),
   ]);
 
+  /* The last resort, so a right-click on bare chrome still offers something. */
+  useEffect(() => {
+    setAppMenu(() => [
+      { label: 'Command palette', hint: keyHint('mod+k'), run: () => setPalette(true) },
+      { label: 'Settings', hint: keyHint('mod+,'), run: () => (cs ? cs.openSettings() : setAppSettings(true)) },
+    ]);
+  }, [cs]);
+
   return (
     <div className="app-shell" data-focus={focus}>
       {/* Before everything, reachable only by keyboard. */}
@@ -487,14 +504,14 @@ export function Shell({
           game={game}
           cs={cs}
           onExit={standalone ? null : onExit}
-          onContextMenu={paneMenu}
+          menuRegion={paneRegion}
         >
           <Resizer edge="left" label="Resize the sidebar" onWidth={resize} />
         </GamePanel>
       )}
 
       <div className="app-main">
-        <header className="app-titlebar" data-tauri-drag-region onContextMenu={paneMenu}>
+        <header className="app-titlebar" data-tauri-drag-region {...paneRegion}>
           {game && (
             <button
               className="app-btn"
@@ -589,7 +606,7 @@ export function Shell({
           </div>
         </header>
 
-        <main className="app-reading" id="story" tabIndex={-1} onContextMenu={storyMenu}>
+        <main className="app-reading" id="story" tabIndex={-1} {...storyRegion}>
           {game && cs ? (
             <div className="app-measure">
               <ReadingKeys cs={cs} gameId={game.id} />

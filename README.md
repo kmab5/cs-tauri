@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.3.3` reads as **major release · major update · session**. `package.json` is
+`0.3.4` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -218,6 +218,20 @@ Two other notes worth knowing: Fraunces carries an optical-size axis from 9 to
 144, so `font-optical-sizing: auto` is what keeps body text off the display cut;
 and Sanchez ships no bold, so bold is synthesised with Roboto Slab behind it in
 the stack.
+
+## Settings, once
+
+There is one settings surface — `src/features/SettingsForm.tsx` — hosted twice:
+a dialog on the library, and the engine's settings overlay while a game is open.
+The rows that need a running engine (brightness, line width, motion) appear only
+then.
+
+**The central store is the single source of truth** for theme, typeface, weight
+and text size. Every control writes there first and then tells the engine.
+Nothing reads it back: the engine persists its own `preferredTheme` in each
+game's save store and applies it while booting, so any code mirroring the
+engine's report into the central store adopted whichever game was opened last —
+which is exactly how the theme used to wander between the library and a story.
 
 ## The landing page
 

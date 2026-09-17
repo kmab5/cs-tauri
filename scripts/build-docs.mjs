@@ -18,7 +18,7 @@
  * own bundled faces, Fraunces over JetBrains Mono, so it looks like the thing
  * it is selling rather than like the brand kit it came from.
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -78,177 +78,218 @@ const page = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ChoiceScript Player — a desktop reader for interactive fiction</title>
-<meta name="description" content="A desktop ChoiceScript player for Windows, macOS and Linux. Your games and saves stay on your own machine.">
+<title>ChoiceScript Player — read interactive fiction on your own machine</title>
+<meta name="description" content="A desktop ChoiceScript player for Windows, macOS and Linux. Games unpack to files you own, saves are JSON you can read, and nothing leaves your machine.">
 <meta property="og:title" content="ChoiceScript Player">
 <meta property="og:description" content="A desktop reader for ChoiceScript games. Nothing leaves your machine.">
 <meta property="og:type" content="website">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <style>
-  /* Palette from kmab5/kmab-brand. Type from the app itself. */
+  /* Faces: the app's own. Fraunces reads the prose, as it does in the app;
+     JetBrains Mono appears only where the content is literally code. */
+  @font-face { font-family:'Fraunces'; src:url('fonts/fraunces.woff2') format('woff2');
+    font-weight:100 900; font-style:normal; font-display:swap; }
+  @font-face { font-family:'Fraunces'; src:url('fonts/fraunces-italic.woff2') format('woff2');
+    font-weight:100 900; font-style:italic; font-display:swap; }
+  @font-face { font-family:'JetBrains Mono'; src:url('fonts/jetbrainsmono.woff2') format('woff2');
+    font-weight:100 800; font-style:normal; font-display:swap; }
+
+  /* Palette: the brand's, in the app's own default register — nocturne, which
+     is what the app opens in. */
   :root {
-    --purple: #b24bff;
-    --green: #3de08a;
-    --amber: #f5c451;
-    --bg: #0e0e11;
-    --surface: #17171b;
-    --surface2: #1e1e24;
-    --line: #2a2a31;
-    --text: #edebe4;
+    --ink: #edebe4;
+    --page: #10121a;
+    --raised: #171a24;
+    --rule: #262b39;
     --muted: #9a9aa6;
-    --dim: #66666f;
-    --display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
-    --mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
-    --ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --dim: #6b6f7d;
+    --accent: #b24bff;
+    --done: #3de08a;
+    --measure: 34rem;
   }
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
   body {
     margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 400 1rem/1.65 var(--ui);
+    background: var(--page);
+    color: var(--ink);
+    font: 400 1.0625rem/1.72 'Fraunces', Georgia, serif;
+    font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
   }
-  a { color: var(--purple); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  code { font-family: var(--mono); font-size: 0.9em; color: var(--amber); }
-  .wrap { margin: 0 auto; max-width: 68rem; padding: 0 clamp(1rem, 4vw, 2.5rem); }
+  .col { margin: 0 auto; max-width: var(--measure); padding: 0 1.5rem; }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  code, kbd, pre { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  h1, h2 { font-weight: 600; letter-spacing: -0.02em; text-transform: lowercase; }
 
-  /* Lowercase headings, per the brand's written habits. */
-  h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -0.02em; text-transform: lowercase; }
-  .label { font: 700 0.6875rem/1.2 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+  /* The reading column, exactly as the app frames it: one measure, centred,
+     nothing in the margins. */
+  main { padding: clamp(3rem, 12vh, 7rem) 0 1rem; }
+  h1 { margin: 0 0 1.5rem; font-size: clamp(1.75rem, 5vw, 2.5rem); line-height: 1.1; }
+  p { margin: 0 0 1.15rem; }
+  .dim { color: var(--muted); }
 
-  header { border-bottom: 1px solid var(--line); }
-  .bar { display: flex; align-items: center; gap: 1rem; padding: 1rem 0; }
-  .bar strong { font-family: var(--display); font-size: 1.0625rem; letter-spacing: -0.01em; }
-  .bar nav { margin-left: auto; display: flex; gap: 1.25rem; font-size: 0.9375rem; }
-  .bar nav a { color: var(--muted); }
-
-  .hero { padding: clamp(3rem, 10vw, 7rem) 0 clamp(2.5rem, 6vw, 4rem); }
-  .hero h1 { margin: 0; font-size: clamp(2.5rem, 7vw, 5rem); line-height: 0.98; }
-  .hero h1 em { font-style: normal; color: var(--purple); }
-  .hero p { margin: 1.25rem 0 0; max-width: 42rem; color: var(--muted); font-size: clamp(1.0625rem, 2vw, 1.25rem); }
-  .cta { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 2rem; }
-  .btn {
-    border: 1px solid var(--line); border-radius: 4px; background: var(--surface);
-    padding: 0.625rem 1.125rem; color: var(--text); font-size: 0.9375rem;
+  /* The choice. This is the hero: a passage, then options, the way every
+     ChoiceScript screen works — and the first option is the download. */
+  .choice { margin: 2rem 0 0; border-top: 1px solid var(--rule); padding-top: 1.5rem; }
+  .choice p.prompt { color: var(--muted); font-style: italic; margin-bottom: 1rem; }
+  .opt {
+    display: block; width: 100%; margin: 0 0 0.625rem; border: 1px solid var(--rule);
+    border-radius: 3px; background: var(--raised); padding: 0.875rem 1rem;
+    color: var(--ink); font: inherit; font-size: 1rem; text-align: left; cursor: pointer;
+    text-decoration: none;
   }
-  .btn:hover { border-color: var(--purple); text-decoration: none; }
-  .btn-primary { border-color: var(--purple); background: var(--purple); color: #16021f; font-weight: 600; }
-  .btn-primary:hover { filter: brightness(1.1); }
-  .version { align-self: center; font-family: var(--mono); font-size: 0.8125rem; color: var(--dim); }
+  .opt:hover, .opt:focus-visible { border-color: var(--accent); outline: none; }
+  .opt:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+  .opt b { font-weight: 600; }
+  .opt span { display: block; color: var(--muted); font-size: 0.9375rem; }
+  .opt-primary { border-color: var(--accent); }
+  .opt-primary b { color: var(--accent); }
 
-  section { padding: clamp(2.5rem, 7vw, 4.5rem) 0; border-top: 1px solid var(--line); }
-  section > .wrap > h2 { margin: 0 0 2rem; font-size: clamp(1.5rem, 3.5vw, 2.25rem); }
+  /* Prose sections. Hairlines between passages rather than cards: the content
+     is continuous reading, not a set of tiles. */
+  section { border-top: 1px solid var(--rule); padding: 2.5rem 0; }
+  section h2 { margin: 0 0 1rem; font-size: 1.375rem; }
+  section > .col > p:last-child { margin-bottom: 0; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); gap: 1.25rem; }
-  .card { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 1.375rem; }
-  .card h3 { margin: 0 0 0.625rem; font-size: 1.1875rem; }
-  .card p { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+  dl { margin: 0; }
+  dt { margin-top: 1.5rem; font-weight: 600; }
+  dt:first-child { margin-top: 0; }
+  dd { margin: 0.35rem 0 0; color: var(--muted); }
 
   table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
-  th, td { border-bottom: 1px solid var(--line); padding: 0.75rem 0.5rem; text-align: left; vertical-align: top; }
-  th { color: var(--dim); font: 700 0.6875rem/1.2 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
-  td code { color: var(--green); }
+  td { border-bottom: 1px solid var(--rule); padding: 0.7rem 0.5rem 0.7rem 0; vertical-align: top; }
+  td:first-child { width: 11rem; }
+  td code { color: var(--done); font-size: 0.875rem; }
+  tr:last-child td { border-bottom: 0; }
 
   pre {
-    overflow-x: auto; border: 1px solid var(--line); border-radius: 6px;
-    background: var(--surface2); padding: 1rem; color: var(--text);
-    font-family: var(--mono); font-size: 0.875rem; line-height: 1.6;
+    overflow-x: auto; border-left: 2px solid var(--rule); background: none;
+    padding: 0 0 0 1rem; color: var(--muted); font-size: 0.8125rem; line-height: 1.75;
   }
-  pre .c { color: var(--dim); }
+  pre b { color: var(--ink); font-weight: 400; }
 
-  footer { border-top: 1px solid var(--line); padding: 2.5rem 0; color: var(--dim); font-size: 0.875rem; }
-  footer p { margin: 0.35rem 0; }
+  footer { border-top: 1px solid var(--rule); padding: 2.5rem 0 4rem; color: var(--dim); font-size: 0.875rem; }
+  footer p { margin: 0 0 0.6rem; }
+  .ver { font-family: 'JetBrains Mono', monospace; font-size: 0.8125rem; color: var(--dim); }
 
-  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: no-preference) {
+    .passage { animation: rise 340ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  }
 </style>
 </head>
 <body>
 
-<header>
-  <div class="wrap bar">
-    <strong>ChoiceScript Player</strong>
-    <nav>
-      <a href="#features">features</a>
-      <a href="#install">install</a>
-      <a href="#author">author mode</a>
-      <a href="https://github.com/${REPO}">source</a>
-    </nav>
-  </div>
-</header>
-
 <main>
-  <div class="wrap hero">
-    <p class="label">desktop · windows · macos · linux</p>
-    <h1>interactive fiction,<br>read <em>on your own machine</em>.</h1>
-    <p>A desktop player for ChoiceScript games. Games unpack to plain files you own, saves are
-      JSON you can read, and the app makes no network requests at all.</p>
-    <div class="cta">
-      <a class="btn btn-primary" href="https://github.com/${REPO}/releases/latest">download for windows</a>
-      <a class="btn" href="https://github.com/${REPO}">read the source</a>
-      <span class="version">${TAG}</span>
-    </div>
-  </div>
+  <div class="col">
+    <h1>interactive fiction, read on your own machine</h1>
 
-  <section id="features">
-    <div class="wrap">
-      <h2>what it does</h2>
-      <div class="grid">
-${FEATURES.map((f) => `        <article class="card">
-          <h3>${f.title}</h3>
-          <p>${squash(f.body)}</p>
-        </article>`).join('\n')}
+    <!-- One interactive moment, and it is the subject itself: a passage and a
+         set of options. Progressive enhancement — with no JavaScript both
+         passages are simply visible. -->
+    <div class="passage" id="p1">
+      <p>You have a folder of ChoiceScript games and nowhere good to read them. Browsers lose your
+        place, the saves live somewhere you cannot see, and every one of them wants the network.</p>
+      <p class="dim">A desktop player. Games unpack to plain text you own; saves are JSON you can
+        open; the app makes no network requests at all.</p>
+
+      <div class="choice">
+        <p class="prompt">What would you like to do?</p>
+        <a class="opt opt-primary" href="https://github.com/${REPO}/releases/latest">
+          <b>Download it and start reading.</b>
+          <span>Windows installer, MSI, or a portable folder. <span class="ver">${TAG}</span></span>
+        </a>
+        <button class="opt" type="button" data-goto="p2">
+          <b>Tell me what it does first.</b>
+          <span>Five things, briefly.</span>
+        </button>
+        <a class="opt" href="https://github.com/${REPO}">
+          <b>Read the source.</b>
+          <span>Tauri and Rust around upstream ChoiceScript.</span>
+        </a>
       </div>
     </div>
-  </section>
+
+    <div class="passage" id="p2" hidden>
+      <p>Everything it does, it does locally, and it is built for sitting with a story for hours
+        rather than glancing at one.</p>
+      <dl>
+${FEATURES.map((f) => `        <dt>${f.title}</dt>
+        <dd>${squash(f.body)}</dd>`).join('\n')}
+      </dl>
+      <div class="choice">
+        <p class="prompt">And now?</p>
+        <a class="opt opt-primary" href="https://github.com/${REPO}/releases/latest">
+          <b>Download it.</b>
+          <span><span class="ver">${TAG}</span> — see the table below for which file.</span>
+        </a>
+        <button class="opt" type="button" data-goto="p1">
+          <b>Back to the top.</b>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <section id="install">
-    <div class="wrap">
-      <h2>install</h2>
+    <div class="col">
+      <h2>which file</h2>
       <table>
-        <thead><tr><th>file</th><th>what it is</th><th>use it when</th></tr></thead>
         <tbody>
-${INSTALL.map(([ext, what, when]) => `          <tr><td><code>${escape(ext)}</code></td><td>${what}</td><td>${when}</td></tr>`).join('\n')}
+${INSTALL.map(([ext, what, when]) => `          <tr><td><code>${escape(ext)}</code></td><td><strong>${what}</strong><br><span class="dim">${when}</span></td></tr>`).join('\n')}
         </tbody>
       </table>
-      <p style="color:var(--muted);font-size:0.9375rem">
-        Every release is built from a tag by GitHub Actions, tests first. Games, saves and settings
-        live in <code>%APPDATA%\\com.kmab.cs-tauri</code> on Windows,
+      <p class="dim" style="margin-top:1.25rem">Every release is built from a tag by GitHub
+        Actions, tests first. Your games and saves live in
+        <code>%APPDATA%\\com.kmab.cs-tauri</code> on Windows,
         <code>~/Library/Application&nbsp;Support/com.kmab.cs-tauri</code> on macOS, and
-        <code>~/.local/share/com.kmab.cs-tauri</code> on Linux.
-      </p>
+        <code>~/.local/share/com.kmab.cs-tauri</code> on Linux.</p>
     </div>
   </section>
 
   <section id="author">
-    <div class="wrap">
-      <h2>for authors</h2>
-      <p style="max-width:44rem;color:var(--muted)">Author mode turns the reader into a testing
-        tool: god mode over every variable, a trace console recording the interpreter's decisions,
-        and upstream's own quicktest and randomtest run headless from the library. Ship a single
-        story as its own app when it is ready.</p>
-      <pre><span class="c"># build a standalone app for one story</span>
-npm run cs:export -- --game sordwin.cszip --out dist-apps/sordwin \\
-  --portable --nsis --icon
+    <div class="col">
+      <h2>if you write them</h2>
+      <p>Author mode turns the reader into a testing tool: every variable editable as a reviewable
+        diff, a console recording each <code>*if</code>, <code>*goto</code> and <code>*set</code>
+        the interpreter runs, and upstream&rsquo;s own quicktest and randomtest — vendored, not
+        reimplemented — run headless from the library.</p>
+      <p>When a story is ready, ship it as its own application: same player, shelf removed, the
+        game&rsquo;s name on the window and the installer.</p>
+      <pre><b>npm run cs:export -- --game sordwin.cszip --out dist-apps/sordwin \\
+  --portable --nsis --icon</b>
 
-<span class="c"># the same, with author mode baked in, for testing</span>
-npm run cs:export -- --game sordwin.cszip --out dist-apps/sordwin-test \\
-  --portable --author</pre>
+adds --author for a build with god mode and the trace console on</pre>
     </div>
   </section>
 </main>
 
 <footer>
-  <div class="wrap">
+  <div class="col">
     <p>Built on <a href="https://github.com/dfabulich/choicescript">ChoiceScript</a> by Dan
-      Fabulich, under the ChoiceScript License. This player is not affiliated with Choice of Games.</p>
-    <p>Games are the property of their authors. Nothing here redistributes them.</p>
-    <p>${TAG} · <a href="https://github.com/${REPO}">github.com/${REPO}</a> · identity from
-      <a href="https://github.com/kmab5/kmab-brand">kmab</a></p>
+      Fabulich, under the ChoiceScript License. Not affiliated with Choice of Games.</p>
+    <p>Games belong to their authors. Nothing here redistributes them.</p>
+    <p><span class="ver">${TAG}</span> &nbsp;
+      <a href="https://github.com/${REPO}">github.com/${REPO}</a> &nbsp;
+      identity from <a href="https://github.com/kmab5/kmab-brand">kmab</a></p>
   </div>
 </footer>
+
+<script>
+  /* The hero is a choice, so it behaves like one: picking an option moves to
+     the next passage and puts focus where the reader is now looking. Without
+     this script both passages are visible and every link still works. */
+  document.querySelectorAll('[data-goto]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var target = document.getElementById(button.dataset.goto);
+      if (!target) return;
+      document.querySelectorAll('.passage').forEach(function (p) { p.hidden = p !== target; });
+      target.querySelector('h1, p, dt')?.setAttribute('tabindex', '-1');
+      target.scrollIntoView({ block: 'start', behavior: 'auto' });
+      target.querySelector('.opt')?.focus();
+    });
+  });
+</script>
 
 </body>
 </html>
@@ -265,7 +306,13 @@ const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 </svg>
 `;
 
-mkdirSync(join(ROOT, 'docs'), { recursive: true });
+mkdirSync(join(ROOT, 'docs', 'fonts'), { recursive: true });
+/* The page is set in the app's own faces, self-hosted for the same reason the
+   app bundles them: no request leaves the machine to render a page about an
+   app that makes no requests. */
+for (const font of ['fraunces', 'fraunces-italic', 'jetbrainsmono']) {
+  copyFileSync(join(ROOT, 'src', 'fonts', `${font}.woff2`), join(ROOT, 'docs', 'fonts', `${font}.woff2`));
+}
 writeFileSync(join(ROOT, 'docs', 'index.html'), page);
 writeFileSync(join(ROOT, 'docs', 'icon.svg'), icon);
 /* GitHub Pages runs Jekyll otherwise, which ignores files it does not like. */

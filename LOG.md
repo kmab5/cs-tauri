@@ -5,6 +5,103 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 20 — v0.3.4, three fixes and a rebuilt landing page
+
+### The context menu: the mechanism was wrong, not a detail
+
+It passed in the harness and did nothing in the app, which is the useful clue —
+the version I shipped hung a React `onContextMenu` on each region and relied on
+it running before a document-level fallback. That is three fragile things at
+once: synthetic event ordering, `stopPropagation` between nested regions, and a
+fresh closure per render. Each can break it silently, and two of them jsdom will
+not notice.
+
+There are no per-region handlers now. **One capture-phase listener on the
+document** handles every right-click, walks outwards from the target to the
+nearest element carrying `data-menu`, and looks the name up in a registry
+components write to with `useMenuRegion`. Nothing depends on event order,
+nothing captures stale state, and the chain ends in an app-wide fallback, so a
+right-click anywhere gets *something* rather than nothing.
+
+The harness now exercises four routes, because the old one only ever tried one:
+a registered region, a nested child of one, an element with no region at all,
+and a text field — which keeps cut, copy, paste and select all, since
+suppressing the native menu removes them and a field without paste is broken in
+a way people notice in a second.
+
+### Settings: there were two, now there is one
+
+You were right that the in-game dialog had not been touched. It was still the
+original, driven straight off the engine's catalogues — so the packaged
+typefaces, the weight slider and author mode existed only in the library's copy,
+and the two had been drifting since the fonts landed.
+
+`SettingsForm.tsx` is now the only settings surface, hosted twice: a dialog on
+the library, and the engine's settings overlay while a game is open. Theme,
+typeface, weight, text size and mode are the app's and appear in both. The rows
+that need a running engine — brightness, line width, motion — appear only when
+there is one.
+
+### The theme, centrally, and why the last two attempts failed
+
+Both previous fixes were patches on a two-way sync, which was the wrong shape.
+
+The engine persists its own `preferredTheme` in **each game's** save store and
+applies it while booting. Anything that mirrored the engine's reported theme
+back into the central store therefore adopted whichever game was opened last —
+so a theme picked in the library did not survive into a game, and the game's own
+theme came back out with you. Last session I skipped the first emission, which
+narrowed the window without closing it.
+
+The mirror is gone. Data flows one way: **the settings form writes the central
+store and then tells the engine.** Nothing reads it back. The engine is told the
+central theme when a game opens, and a change made inside a game goes through
+the same form, so the store is written before the engine ever reports anything.
+
+### The landing page, rebuilt
+
+Loaded `frontend-design` and checked the old page against its calibration list.
+It had three of the named tells: a tracked-out uppercase eyebrow, meta strings
+joined with middle dots, and content chopped into identical rounded cards. The
+near-black-plus-one-accent palette is also on that list, but it is your brand's
+palette and the skill is explicit that the brief's own words win, so it stayed.
+
+What the page is now: **the hero is a choice.** A passage of prose, then the
+options — the way every ChoiceScript screen works, and the first option is the
+download. Picking "tell me what it does first" advances to a second passage and
+moves focus there. One interactive moment, and it is the subject itself rather
+than a big number with a gradient. Without JavaScript both passages are visible
+and every link still works.
+
+Everything else follows from that: one reading measure, centred, nothing in the
+margins, hairlines between passages instead of cards, a table where the content
+is genuinely tabular, and mono only where the content is literally code or a
+version. Set in the app's own Fraunces and JetBrains Mono, self-hosted — no
+request leaves the machine to render a page about an app that makes no requests.
+
+`npm run test:docs` now also fails if any of those three tells reappears. A
+guard is the only way "don't drift back" survives contact with a future session.
+
+### Verified
+
+- `npm run test:webview` — **91 passed, 0 failed** (six new for the menus,
+  across four routes, plus the story's own menu in-game)
+- `npm run test:runners` — **101 passed, 0 failed**
+- `npm run test:author` — 41 passed, 0 failed
+- `npm run test:standalone` — 18 passed, 0 failed
+- `npm run test:game` — **86 passed, 0 failed** on Choice of Magics
+- docs freshness and tells, version, theme-scope, register, stale — pass
+
+### Worth saying about the theme fix
+
+It is the third attempt, and the first two were both me patching a design I
+should have replaced. Two-way sync between a central store and a per-game store
+has no correct version — one of them has to be the source. That is now written
+into `SettingsForm`'s header comment so the next person to touch it does not
+reintroduce the mirror.
+
+---
+
 ## 2026-09-08 · Session 19 — v0.3.3, the five, and a landing page
 
 All five implemented, achievement analysis skipped as instructed.
