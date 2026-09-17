@@ -1769,3 +1769,50 @@ kbd,
 .build-progress .app-meter {
   margin-bottom: var(--app-1);
 }
+
+/* ------------------------------------------------------------- test report */
+
+.test-report {
+  margin-top: var(--app-3);
+  font-family: var(--app-font-ui);
+}
+.test-report dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: var(--app-2);
+  margin: 0 0 var(--app-3);
+}
+.test-report dt {
+  color: var(--app-label-dim);
+  font-size: var(--app-text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.test-report dd {
+  margin: 0;
+  font-size: var(--app-text-lg);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.test-failure {
+  margin-bottom: var(--app-2);
+  border-left: 2px solid var(--app-accent);
+  padding-left: var(--app-2);
+  font-size: var(--app-text-md);
+}
+.test-failure b {
+  display: block;
+  font-size: var(--app-text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--app-label-dim);
+}
+.test-failure code {
+  display: block;
+  margin-top: var(--app-1);
+  color: var(--app-label-dim);
+  font-family: var(--cs-font-mono, ui-monospace, monospace);
+  font-size: var(--app-text-xs);
+  word-break: break-word;
+}

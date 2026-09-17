@@ -1,0 +1,260 @@
+/*
+ * The reading faces, packaged.
+ *
+ * `engine/theme/themes.css` has always *named* families — Iowan Old Style,
+ * Optima, Rockwell, OpenDyslexic — and the project shipped no font files and no
+ * `@font-face` rule anywhere. On a machine without those fonts installed, which
+ * is every Windows machine, each stack fell through to a system default and the
+ * typeface setting did nothing visible. That is the whole bug.
+ *
+ * Every family here is bundled, subsetted to Latin and Latin Extended-A plus the
+ * punctuation prose actually uses, and converted to woff2: 13.4 MB of TTF
+ * becomes 1.16 MB. Variable fonts are used wherever the family ships one, so a
+ * whole weight range costs two files — one roman, one italic — instead of eight.
+ *
+ * Nothing is fetched. These are files in the bundle, which is the same promise
+ * the rest of the app makes.
+ *
+ * The selectors are `html body.font-x` rather than `body.font-x` on purpose. The
+ * engine's own stylesheet is injected at runtime, after this one, so matching
+ * its specificity would lose the cascade by load order; one extra element
+ * selector wins regardless of which arrives first.
+ */
+
+@font-face {
+  font-family: 'Fraunces';
+  src: url('../fonts/fraunces.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  src: url('../fonts/fraunces-italic.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Google Sans';
+  src: url('../fonts/googlesans.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Google Sans';
+  src: url('../fonts/googlesans-italic.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('../fonts/lato-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('../fonts/lato-400i.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('../fonts/lato-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('../fonts/lato-700i.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nunito';
+  src: url('../fonts/nunito.woff2') format('woff2');
+  font-weight: 200 1000;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nunito';
+  src: url('../fonts/nunito-italic.woff2') format('woff2');
+  font-weight: 200 1000;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Kanit';
+  src: url('../fonts/kanit-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Kanit';
+  src: url('../fonts/kanit-400i.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Kanit';
+  src: url('../fonts/kanit-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Kanit';
+  src: url('../fonts/kanit-700i.woff2') format('woff2');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nunito Sans';
+  src: url('../fonts/nunitosans.woff2') format('woff2');
+  font-weight: 200 1000;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nunito Sans';
+  src: url('../fonts/nunitosans-italic.woff2') format('woff2');
+  font-weight: 200 1000;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Sanchez';
+  src: url('../fonts/sanchez-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Sanchez';
+  src: url('../fonts/sanchez-400i.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Roboto Slab';
+  src: url('../fonts/robotoslab.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../fonts/jetbrainsmono.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../fonts/jetbrainsmono-italic.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+/*
+ * OpenDyslexic is not here, and cannot be: it was not in the archive, and the
+ * engine's hint claiming "OpenDyslexic" has been describing a font the project
+ * never shipped. `local()` means a system install is used if the reader has
+ * one; otherwise the stack falls through to Nunito, which of everything bundled
+ * has the highest x-height and the most open apertures.
+ */
+@font-face {
+  font-family: 'OpenDyslexic';
+  src: local('OpenDyslexic'), local('OpenDyslexic Regular'), local('Open Dyslexic');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --------------------------------------------------------------- the stacks */
+
+/*
+ * Serif is the default face, so it is set on body itself rather than on a
+ * class — there is no `font-serif` class when nothing has been chosen.
+ *
+ * Fraunces carries an optical size axis from 9 to 144. `font-optical-sizing:
+ * auto` is what keeps body text on the text end of it; without that the default
+ * instance is a display cut and reads as a poster at 18px.
+ */
+html body {
+  --cs-font-body: 'Fraunces', 'Iowan Old Style', Charter, Constantia, Georgia, serif;
+  font-optical-sizing: auto;
+}
+
+html body.font-serif {
+  --cs-font-body: 'Fraunces', 'Iowan Old Style', Charter, Constantia, Georgia, serif;
+}
+
+html body.font-sans,
+html body.sans {
+  --cs-font-body: 'Google Sans', 'Lato', 'Nunito', ui-sans-serif, system-ui, sans-serif;
+}
+
+html body.font-humanist {
+  --cs-font-body: 'Kanit', 'Nunito Sans', Optima, Candara, 'Gill Sans', sans-serif;
+}
+
+/*
+ * Sanchez ships regular and italic only — no bold. The browser synthesises one,
+ * and Roboto Slab sits behind it in the stack for anything Sanchez lacks.
+ */
+html body.font-slab {
+  --cs-font-body: 'Sanchez', 'Roboto Slab', Rockwell, 'Bookman Old Style', Georgia, serif;
+}
+
+html body.font-mono {
+  --cs-font-body: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --cs-measure: 72ch;
+}
+
+html body.font-dyslexia,
+html body.dyslexia {
+  --cs-font-body: 'OpenDyslexic', 'Nunito', ui-sans-serif, system-ui, sans-serif;
+  --cs-leading: 1.75;
+}
+
+/*
+ * The mono family is also what the chrome's code, key hints and the trace
+ * console use, so it is packaged rather than borrowed from the platform.
+ */
+html body {
+  --cs-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}

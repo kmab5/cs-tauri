@@ -15,6 +15,7 @@ import {
   BarChart3,
   Bookmark,
   Bug,
+  FlaskConical,
   Sparkles,
   Command as CommandIcon,
   Maximize2,
@@ -35,6 +36,7 @@ import { AchievementsPanel } from './AchievementsPanel';
 import { AppSettings } from './AppSettings';
 import { GodMode } from './author/GodMode';
 import { DebugConsole } from './author/DebugConsole';
+import { TestRunner } from './author/TestRunner';
 import { isAuthorMode } from '@/lib/author/mode';
 import { installInstrumentation, removeInstrumentation, trace } from '@/lib/author/instrument';
 import { Palette, keyHint, type Command } from './Palette';
@@ -277,6 +279,7 @@ export function Shell({
      reading one. */
   const [panel, setPanel] = useState<'achievements' | 'god'>('achievements');
   const [console_, setConsole] = useState(false);
+  const [tests, setTests] = useState(false);
   const author = isAuthorMode();
   const [width, setWidth] = useState(() => {
     const stored = Number(localStorage.getItem(SIDEBAR.key));
@@ -392,6 +395,7 @@ export function Shell({
       game && cs ? (wide ? setInspector((on) => !on) : cs.openAchievements()) : undefined,
     'toggle-focus': () => game && setFocus((on) => !on),
     console: () => author && game && setConsole((v) => !v),
+    tests: () => author && game && setTests(true),
     library: () => (game && !standalone ? onExit() : undefined),
     /* On the library page Settings means the app's settings, not a running
        game's — there is no game to restart or save. */
@@ -465,6 +469,14 @@ export function Shell({
                       }}
                     >
                       <Sparkles className="size-3.5" aria-hidden />
+                    </button>
+                    <button
+                      className="app-btn"
+                      aria-label="Test this game"
+                      title={`Quicktest and randomtest (${keyHint('mod+shift+t')})`}
+                      onClick={() => setTests(true)}
+                    >
+                      <FlaskConical className="size-3.5" aria-hidden />
                     </button>
                     <button
                       className="app-btn"
@@ -544,6 +556,7 @@ export function Shell({
       )}
 
       <Palette open={palette} onOpenChange={setPalette} commands={commands} />
+      {author && tests && cs && <TestRunner cs={cs} onClose={() => setTests(false)} />}
       {appSettings && <AppSettings onClose={() => setAppSettings(false)} />}
     </div>
   );

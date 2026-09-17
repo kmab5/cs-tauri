@@ -33,7 +33,7 @@ moment on a fresh profile.
 
 ## Versioning and releases
 
-`0.3.0` reads as **major release · major update · session**. `package.json` is
+`0.3.1` reads as **major release · major update · session**. `package.json` is
 the single source of truth: `src-tauri/tauri.conf.json` deliberately has no
 `version` key so Tauri reads it from there, which keeps the installer, the
 About box and the release label in agreement by construction. The crate version
@@ -44,9 +44,9 @@ disagrees with either.
 Pushing a `v*` tag builds and publishes:
 
 ```bash
-npm version 0.3.1 --no-git-tag-version   # then update src-tauri/Cargo.toml
-git commit -am "release: v0.3.1"
-git tag v0.3.1 && git push --follow-tags
+npm version 0.3.2 --no-git-tag-version   # then update src-tauri/Cargo.toml
+git commit -am "release: v0.3.2"
+git tag v0.3.2 && git push --follow-tags
 ```
 
 `.github/workflows/release.yml` then runs the tests, builds the NSIS installer,
@@ -186,6 +186,38 @@ kept changing colour. `npm run test:register` fails the build if one escapes to
 Variable, Inter/Cantarell), the titlebar inset that clears the macOS traffic
 lights, and the density rule: controls are 28 px under a cursor and 44 px under
 `(pointer: coarse)`, because the WCAG target size is about fingers.
+
+## The reading faces
+
+`engine/theme/themes.css` has always *named* families — Iowan Old Style, Optima,
+Rockwell, OpenDyslexic — and the project shipped no font files and no
+`@font-face` rule anywhere, so on any machine without those installed the
+typeface setting did nothing. Every family is bundled now, in
+`src/styles/fonts.css`:
+
+| Face | Families |
+| --- | --- |
+| Serif | **Fraunces** |
+| Sans | **Google Sans**, Lato, Nunito |
+| Humanist | **Kanit**, Nunito Sans |
+| Slab | **Sanchez**, Roboto Slab |
+| Mono | **JetBrains Mono** |
+| Dyslexic | **OpenDyslexic** — see below |
+
+Subsetted to Latin and Latin Extended-A plus the punctuation prose uses, and
+converted to woff2: 13.4 MB of TTF becomes 1.16 MB. Variable fonts are used
+wherever the family ships one, so a whole weight range costs two files rather
+than eight. Nothing is fetched at runtime.
+
+**OpenDyslexic is still not here** — it was not in the archive, and the engine's
+hint has been naming a font the project never had. Its `@font-face` uses
+`local()`, so a system install works; otherwise the stack falls through to
+Nunito. Send the files and it is a two-line change.
+
+Two other notes worth knowing: Fraunces carries an optical-size axis from 9 to
+144, so `font-optical-sizing: auto` is what keeps body text off the display cut;
+and Sanchez ships no bold, so bold is synthesised with Roboto Slab behind it in
+the stack.
 
 ## The theme-scope trap
 
@@ -357,6 +389,21 @@ Writes go into the interpreter's own objects and keep the representation it
 uses — ChoiceScript stores numbers as strings, so a numeric stat stays a
 numeric string, and refuses a non-numeric input rather than quietly turning
 `*if warmth > 50` into a string comparison.
+
+**Quicktest and randomtest** (`⌘⇧T`) — the two tools from the upstream
+ChoiceScript repository, which this engine references but never shipped.
+Quicktest is deterministic and covers options: a baseline that always takes the
+first option, then one run per option discovered, each following the baseline to
+that choice before deviating. Randomtest plays whole games at random from a
+seed, and the seed is the point — a crash on iteration 47 of seed 12345 can be
+replayed exactly. Iterations, seed, avoid-used-options, log prose, log choices,
+loop guard and input values are all controls. Every failure is reported with the
+path that produced it.
+
+Both drive the real interpreter, so the story plays itself in the window while
+they run. Neither reports line-level coverage yet; that needs the interpreter's
+own `localCoverage`, and a number that looks like coverage but is not would be
+worse than none.
 
 **The trace console** (`⌘⇧D`) — every decision the interpreter made, in order:
 which way each `*if` went, which label a `*goto` jumped to, which scene was

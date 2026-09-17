@@ -532,6 +532,59 @@ server.listen(PORT, async () => {
         ok('and variable writes with their value', /\*create warmth/.test(traced));
       }
 
+      console.log('\nquicktest and randomtest');
+      const testBtn = Array.prototype.slice
+        .call(d.querySelectorAll('.app-titlebar button'))
+        .find((b) => /Test this game/.test(b.getAttribute('aria-label') || ''));
+      ok('the test runner has a control', !!testBtn);
+      if (testBtn) {
+        testBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 400));
+        ok('it opens with both tools', /Quicktest/.test(d.body.textContent) &&
+          /Randomtest/.test(d.body.textContent));
+
+        /* Two iterations is enough to prove the driver plays the game to an
+           ending, answers choices and reports — which is the part that cannot
+           be reasoned about, only run. */
+        const iterations = d.querySelector('input[type=number]');
+        if (iterations) {
+          const setValue = Object.getOwnPropertyDescriptor(
+            win.HTMLInputElement.prototype,
+            'value',
+          ).set;
+          setValue.call(iterations, '2');
+          iterations.dispatchEvent(new win.Event('input', { bubbles: true }));
+        }
+        const rnd = Array.prototype.slice
+          .call(d.querySelectorAll('button'))
+          .find((b) => /^Randomtest/.test(b.textContent.trim()));
+        ok('randomtest can be started', !!rnd);
+        if (rnd) {
+          rnd.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+          /* The driver plays a real game through the real interpreter, so this
+             waits on the story rather than on a tick. */
+          let waited = 0;
+          while (waited < 20000 && !/Finished/.test(d.body.textContent)) {
+            await new Promise((r) => setTimeout(r, 250));
+            waited += 250;
+          }
+          ok('it finishes', /Finished/.test(d.body.textContent), `after ${waited}ms`);
+          ok('it reports screens played', /Screens/.test(d.body.textContent));
+          ok('it reports option coverage', /Options taken/.test(d.body.textContent));
+          ok('the fixture game passes it',
+            /No failures/.test(d.body.textContent),
+            (d.querySelector('.test-report')?.textContent || '').slice(0, 160));
+          ok('an ending was reached',
+            !/Endings reached\s*0\b/.test(d.querySelector('.test-report')?.textContent || ''),
+            (d.querySelector('.test-report')?.textContent || '').slice(0, 120));
+        }
+        const close = Array.prototype.slice
+          .call(d.querySelectorAll('button'))
+          .find((b) => /^Close/.test(b.textContent.trim()));
+        if (close) close.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 400));
+      }
+
       if (godBtn) {
         godBtn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
         await new Promise((r) => setTimeout(r, 500));
@@ -881,6 +934,19 @@ server.listen(PORT, async () => {
   ok('save rows are rows, not accent-striped cards',
     !save || win.getComputedStyle(save).borderLeftWidth !== '3px',
     save ? win.getComputedStyle(save).borderLeftWidth : 'no saves yet');
+
+  console.log('\nthe reading faces are packaged');
+  const face = () => win.getComputedStyle(d.body).getPropertyValue('--cs-font-body').trim();
+  ok('the default face is the packaged serif', /Fraunces/.test(face()), face().slice(0, 60));
+  win.ChoiceScript.setTypeface('mono');
+  await new Promise((r) => setTimeout(r, 250));
+  ok('switching the typeface switches the family', /JetBrains Mono/.test(face()),
+    face().slice(0, 60));
+  win.ChoiceScript.setTypeface('humanist');
+  await new Promise((r) => setTimeout(r, 250));
+  ok('each face resolves to a bundled family', /Kanit/.test(face()), face().slice(0, 60));
+  win.ChoiceScript.setTypeface('serif');
+  await new Promise((r) => setTimeout(r, 200));
 
   console.log('\nthe chrome follows the theme');
   const paper = () => win.getComputedStyle(d.body).getPropertyValue('--cs-paper').trim();

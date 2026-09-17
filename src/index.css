@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+/* The reading faces. Packaged woff2, not system-font names — see the file. */
+@import './styles/fonts.css';
+
 /* The chrome register: --app-* tokens, window layout, platform density. */
 @import './styles/chrome.css';
 

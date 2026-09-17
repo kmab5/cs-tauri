@@ -5,6 +5,110 @@ Newest entry at the top.
 
 ---
 
+## 2026-09-08 · Session 17 — v0.3.1, the tests and the fonts
+
+### Why the fonts were never working
+
+`engine/theme/themes.css` names families — Iowan Old Style, Optima, Rockwell,
+OpenDyslexic — and **the project has never contained a single `@font-face` rule
+or one font file**. On any machine without those installed, which is every
+Windows machine, each stack fell through to a system default and the typeface
+setting did nothing visible. It was not a packaging mistake; there was nothing
+to package.
+
+All nine families from the archive are now bundled, subsetted to Latin and Latin
+Extended-A plus the punctuation prose actually uses, and converted to woff2:
+**13.4 MB of TTF becomes 1.16 MB**, 21 files. Variable fonts are used wherever
+the family ships one — Fraunces, Google Sans, Nunito, Nunito Sans, Roboto Slab,
+JetBrains Mono — so a full weight range costs one roman and one italic instead
+of eight statics.
+
+Three things found on the way in:
+
+- **Fraunces has an optical-size axis from 9 to 144.** Its default instance is a
+  display cut, which at 18px reads like a poster. `font-optical-sizing: auto` is
+  what keeps body text on the text end of the axis.
+- **Sanchez ships no bold**, only regular and italic. Bold is synthesised, with
+  Roboto Slab behind it in the stack.
+- **The selectors have to be `html body.font-x`**, not `body.font-x`. The
+  engine's own stylesheet is injected at runtime, *after* the bundled one, so
+  matching its specificity would lose on load order.
+
+**OpenDyslexic is still missing.** It was not in the archive, and the engine's
+hint has been naming a font the project never had. Its `@font-face` uses
+`local()` so a system install is picked up, and the stack otherwise falls to
+Nunito, which of everything bundled has the highest x-height. Send the files and
+it is a two-line change.
+
+### Quicktest and randomtest
+
+Upstream ships both; this engine references them — `scene.js` reads
+`this.quicktest` and `this.randomtest` and sets `stats.choice_randomtest` — and
+ships neither. So they are written here, keeping each one's *idea*:
+
+**Quicktest** is deterministic and about option coverage. Upstream walks the
+game taking every option of every choice. Here: a baseline that always takes the
+first option, then one run per option discovered, each following the baseline's
+decisions to that choice, deviating, and carrying on — which discovers further
+choices, which queue in turn. It stops when nothing is untaken, which is
+upstream's goal expressed as a halting condition.
+
+**Randomtest** is stochastic and about volume, and the **seed is the whole
+point**: a crash on iteration 47 of seed 12345 has to be replayable or it is a
+rumour. Each iteration is seeded separately (`seed + run * 7919`) so a single
+iteration can be re-run on its own.
+
+Every upstream option is a control: iterations, seed, avoid used options, log
+prose, log choices, stop at first failure, loop guard, and what to type when the
+story asks for text or a number. Failures are reported **with the path that
+produced them**, last twelve decisions shown, so they can be walked by hand.
+
+Both drive the real interpreter through the public API rather than
+re-implementing it, which is the only way a pass means anything — and it means
+the story visibly plays itself while a run goes. That is documented rather than
+hidden; it is also the clearest possible indication of what is being tested.
+
+Two details the engine decided for me: input pendings carry `numeric`,
+`minimum` and `maximum`, so nothing has to be inferred (upstream picks the
+midpoint for the same reason), and a choice site is identified by the live
+Scene's `name:lineNum` rather than by option text — two choices with identical
+wording at different points are different sites, which is what coverage has to
+mean.
+
+**What neither does: line-level coverage.** That needs the interpreter's own
+`localCoverage`, and a number that looks like coverage but is not would be worse
+than no number. Named as the next step rather than faked.
+
+### Verified by running, not reasoning
+
+The harness now drives an actual randomtest: two iterations of the fixture game,
+through the real engine, waiting on the story rather than on a tick. It asserts
+the run finishes, reports screens and option coverage, reaches an ending, and
+that the fixture passes. That is the part that cannot be reasoned about.
+
+- `npm run test:author` — **37 passed, 0 failed** (eight new for the runners)
+- `npm run test:webview` — **83 passed, 0 failed** (three new: the default face
+  is Fraunces, switching typeface switches family, each face resolves to a
+  bundled family)
+- `npm run test:standalone` — 18 passed, 0 failed
+- `npm run test:game` — **75 passed, 0 failed** on Choice of Magics
+- theme-scope, register, stale, version — pass
+
+### One thing to hand back rather than decide
+
+impeccable's detector went from 0 findings to 7, all the same one:
+`overused-font` on **Fraunces, Lato and Roboto Slab**. Its heuristic is fonts
+that signal generic design, and those three are on its list.
+
+They are your explicit choices, so I have not touched them — but it is worth
+weighing against the personality you gave me for PRODUCT.md. "Sharp tool,
+Linear/Raycast-like" and Lato are not obviously the same instinct. Fraunces in
+particular is doing something specific and un-generic; Lato and Roboto Slab are
+the two I would question, and they are both fallbacks rather than primaries, so
+dropping them costs almost nothing. Your call.
+
+---
+
 ## 2026-09-08 · Session 16 — v0.3.0, author mode
 
 Three of the four author-mode features are in. The fourth — quick and random

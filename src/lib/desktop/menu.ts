@@ -22,6 +22,7 @@ export type MenuId =
   | 'palette'
   | 'stats'
   | 'console'
+  | 'tests'
   | 'toggle-focus'
   | 'zoom-in'
   | 'zoom-out'
@@ -50,6 +51,7 @@ const KEYS: Record<string, MenuId> = {
   'mod+shift+a': 'achievements',
   'mod+shift+s': 'stats',
   'mod+shift+d': 'console',
+  'mod+shift+t': 'tests',
   'mod+,': 'settings',
   'mod+\\': 'toggle-sidebar',
   'mod+i': 'toggle-panel',
